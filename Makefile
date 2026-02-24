@@ -10,7 +10,7 @@ install:
 	$(CONDA) create -n $(ENV_NAME) python=3.10 -y
 	$(CONDA) run -n $(ENV_NAME) pip install -r requirements.txt
 	$(CONDA) run -n $(ENV_NAME) pip install -e ".[dev]"
-	@echo "✅ Environment '$(ENV_NAME)' ready. Activate with: conda activate $(ENV_NAME)"
+	@echo "Environment '$(ENV_NAME)' ready. Activate with: conda activate $(ENV_NAME)"
 
 install-dev: install
 	$(CONDA) run -n $(ENV_NAME) pip install pytest ruff

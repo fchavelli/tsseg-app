@@ -1,15 +1,3 @@
----
-title: tsseg - Time Series Segmentation
-emoji: 📈
-colorFrom: blue
-colorTo: purple
-sdk: gradio
-sdk_version: "4.44.0"
-app_file: app.py
-pinned: true
-license: agpl-3.0
----
-
 # tsseg-app — Interactive Time Series Segmentation
 
 <p align="center">
@@ -77,11 +65,11 @@ tsseg-app/
 
 | Tab | Description |
 |-----|-------------|
-| 📊 **Data** | Load synthetic, MoCap, or upload CSV data |
-| 🔬 **Segmentation** | Choose algorithm, tune parameters, run detection |
-| 📊 **Comparison** | Compare multiple algorithm runs side by side |
-| 📏 **Evaluation** | Compute F1, ARI, SMS, etc. when ground truth is available |
-| ℹ️ **About** | Full list of available algorithms and links |
+| **Data** | Load synthetic, MoCap, or upload CSV data |
+| **Segmentation** | Choose algorithm, tune parameters, run detection |
+| **Comparison** | Compare multiple algorithm runs side by side |
+| **Evaluation** | Compute F1, ARI, SMS, etc. when ground truth is available |
+| **About** | Full list of available algorithms and links |
 
 ## GPU Algorithms on CPU
 
