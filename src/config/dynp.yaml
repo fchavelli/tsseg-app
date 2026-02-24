@@ -1,0 +1,5 @@
+name: DynpDetector
+task: change_point
+tunable_parameters:
+  - model: ["l1", "l2", "rbf"]
+  - min_size: [2, 5, 10]

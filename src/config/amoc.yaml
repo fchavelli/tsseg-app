@@ -1,0 +1,4 @@
+name: AmocDetector
+task: change_point
+tunable_parameters:
+  - min_size: [5, 15, 30]

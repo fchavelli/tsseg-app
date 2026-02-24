@@ -1,0 +1,6 @@
+name: E2USDDetector
+task: state
+tunable_parameters:
+  - window_size: [64, 128, 256]
+  - step: [20, 50, 100]
+  - out_channels: [4, 8, 16]

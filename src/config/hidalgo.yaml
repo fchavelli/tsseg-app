@@ -1,0 +1,6 @@
+name: HidalgoDetector
+task: state
+tunable_parameters:
+  - K_states: [2, 5, 10]
+  - zeta: [0.5, 0.8, 1.0]
+  - q: [2, 3, 5]

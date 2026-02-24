@@ -1,0 +1,6 @@
+name: Time2StateDetector
+task: state
+tunable_parameters:
+  - window_size: [64, 128, 256]
+  - step: [20, 50, 100]
+  - depth: [1, 5, 10]

@@ -1,0 +1,5 @@
+name: ClapDetector
+task: state
+tunable_parameters:
+  - window_size: ["suss", "fft", "acf"]
+  - classifier: ["rocket", "mrhydra"]

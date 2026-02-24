@@ -1,0 +1,5 @@
+name: TSCP2Detector
+task: change_point
+tunable_parameters:
+  - window_size: [64, 128, 256]
+  - loss: ["nce", "dcl", "fc"]

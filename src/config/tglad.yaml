@@ -1,0 +1,6 @@
+name: TGLADDetector
+task: change_point
+tunable_parameters:
+  - window_size: [32, 64, 128]
+  - threshold: [0.1, 0.3, 0.5]
+  - epochs: [500, 1000, 2000]

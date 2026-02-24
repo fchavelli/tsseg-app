@@ -1,0 +1,6 @@
+name: HdpHsmmDetector
+task: state
+tunable_parameters:
+  - alpha: [1.0, 3.0, 6.0]
+  - dur_alpha: [2.0, 10.0, 20.0]
+  - n_max_states: [10, 20, 40]

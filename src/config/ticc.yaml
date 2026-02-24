@@ -1,0 +1,6 @@
+name: TiccDetector
+task: state
+tunable_parameters:
+  - window_size: [3, 5, 10]
+  - lambda_parameter: [0.0001, 0.001, 0.01]
+  - beta: [100, 1000, 5000]

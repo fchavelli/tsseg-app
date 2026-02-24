@@ -1,0 +1,6 @@
+name: FLUSSDetector
+task: change_point
+tunable_parameters:
+  - window_size: [10, 25, 50]
+  - exclusion_factor: [3, 5, 10]
+  - multivariate_strategy: ["ensembling", "l2"]

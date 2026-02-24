@@ -1,0 +1,6 @@
+name: TireDetector
+task: change_point
+tunable_parameters:
+  - window_size: [10, 20, 50]
+  - domain: ["both", "TD", "FD"]
+  - max_epochs: [20, 50, 100]

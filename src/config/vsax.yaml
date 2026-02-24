@@ -1,0 +1,6 @@
+name: VSAXDetector
+task: state
+tunable_parameters:
+  - alphabet_size: [4, 6, 8]
+  - paa_segments: [4, 8, 12]
+  - penalty: [0.2, 0.6, 1.0]

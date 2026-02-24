@@ -1,0 +1,4 @@
+name: EAggloDetector
+task: state
+tunable_parameters:
+  - alpha: [0.5, 1.0, 2.0]

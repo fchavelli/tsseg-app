@@ -1,0 +1,5 @@
+name: GreedyGaussianDetector
+task: state
+tunable_parameters:
+  - k_max: [5, 10, 20]
+  - lamb: [0.1, 1.0, 10.0]

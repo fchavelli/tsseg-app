@@ -1,0 +1,16 @@
+# Core
+tsseg[all] @ git+https://github.com/fchavelli/tsseg.git
+
+# Web framework
+gradio>=4.44,<5
+
+# Plotting
+plotly>=5.18
+
+# Data
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+
+# YAML config
+pyyaml>=6.0

@@ -1,0 +1,5 @@
+name: KCPDDetector
+task: change_point
+tunable_parameters:
+  - kernel: ["linear", "cosine", "rbf"]
+  - pen: [5.0, 20.0, 100.0]

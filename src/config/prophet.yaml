@@ -1,0 +1,5 @@
+name: ProphetDetector
+task: change_point
+tunable_parameters:
+  - n_changepoints: [5, 10, 25]
+  - multivariate_strategy: ["ensembling", "l2"]

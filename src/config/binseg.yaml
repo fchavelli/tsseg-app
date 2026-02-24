@@ -1,0 +1,5 @@
+name: BinSegDetector
+task: change_point
+tunable_parameters:
+  - model: ["l1", "l2", "rbf"]
+  - penalty: [5, 20, 100]

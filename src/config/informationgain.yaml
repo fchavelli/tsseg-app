@@ -1,0 +1,5 @@
+name: InformationGainDetector
+task: change_point
+tunable_parameters:
+  - k_max: [5, 10, 25]
+  - step: [1, 5, 10]

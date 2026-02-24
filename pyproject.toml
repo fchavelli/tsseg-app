@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "tsseg-app"
+version = "0.1.0"
+description = "Interactive web application for time series segmentation using tsseg"
+readme = "README.md"
+license = {text = "AGPLv3"}
+requires-python = ">=3.10"
+authors = [
+    {name = "François Chavelli"},
+]
+
+dependencies = [
+    "tsseg[all] @ git+https://github.com/fchavelli/tsseg.git",
+    "gradio>=4.44,<5",
+    "plotly>=5.18",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
