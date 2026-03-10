@@ -12,6 +12,7 @@ plotly>=5.18
 numpy>=1.24
 pandas>=2.0
 scipy>=1.11
+numba>=0.59
 
 # YAML config
 pyyaml>=6.0

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import inspect
+import importlib
+import importlib.util
 import logging
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
-
-from tsseg import algorithms as algorithms_pkg
 
 logger = logging.getLogger(__name__)
 
@@ -103,16 +105,103 @@ def _infer_category(name: str) -> str:
     return "Other"
 
 
-def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
-    """Iterate over all exported detector classes from tsseg.algorithms."""
+def _iter_exported_detectors_from_package() -> Iterable[Tuple[str, type]]:
+    """Iterate detectors through ``tsseg.algorithms.__all__``.
+
+    This path can fail when optional dependencies are missing because importing
+    ``tsseg.algorithms`` eagerly imports many detector modules.
+    """
+    from tsseg import algorithms as algorithms_pkg
+
     exported = getattr(algorithms_pkg, "__all__", [])
     for name in exported:
         try:
             obj = getattr(algorithms_pkg, name)
-        except AttributeError:
+        except Exception:
             continue
         if inspect.isclass(obj) and hasattr(obj, "_tags"):
             yield name, obj
+
+
+def _parse_algorithms_init_exports(init_file: Path) -> list[tuple[str, str]]:
+    """Parse `tsseg/algorithms/__init__.py` to extract `(module, class)` exports."""
+    text = init_file.read_text(encoding="utf-8")
+    exports: list[tuple[str, str]] = []
+
+    in_multiline_import = False
+    multiline_module = ""
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if in_multiline_import:
+            if line.startswith(")"):
+                in_multiline_import = False
+                multiline_module = ""
+                continue
+            name = line.split("#", 1)[0].strip().rstrip(",")
+            if name:
+                exports.append((multiline_module, name))
+            continue
+
+        m = re.match(r"^from \.([a-zA-Z0-9_\.]+) import \($", line)
+        if m:
+            in_multiline_import = True
+            multiline_module = m.group(1)
+            continue
+
+        m = re.match(r"^from \.([a-zA-Z0-9_\.]+) import ([A-Za-z0-9_]+)$", line)
+        if m:
+            exports.append((m.group(1), m.group(2)))
+
+    return exports
+
+
+def _iter_exported_detectors_from_source() -> Iterable[Tuple[str, type]]:
+    """Iterate detectors by importing module-by-module with graceful fallback."""
+    spec = importlib.util.find_spec("tsseg.algorithms")
+    if spec is None or spec.origin is None:
+        return
+
+    init_file = Path(spec.origin)
+    if not init_file.exists():
+        return
+
+    seen: set[str] = set()
+    for module_rel, class_name in _parse_algorithms_init_exports(init_file):
+        if class_name in seen:
+            continue
+        module_name = f"tsseg.algorithms.{module_rel}"
+        try:
+            module = importlib.import_module(module_name)
+            obj = getattr(module, class_name)
+        except Exception as exc:
+            logger.debug("Skipping %s from %s: %s", class_name, module_name, exc)
+            continue
+
+        if inspect.isclass(obj) and hasattr(obj, "_tags"):
+            seen.add(class_name)
+            yield class_name, obj
+
+
+def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
+    """Iterate over exported detector classes with optional-deps tolerance."""
+    try:
+        yielded = False
+        for item in _iter_exported_detectors_from_package():
+            yielded = True
+            yield item
+        if yielded:
+            return
+    except Exception as exc:
+        logger.warning(
+            "Could not import tsseg.algorithms directly (%s). Falling back to resilient discovery.",
+            exc,
+        )
+
+    yield from _iter_exported_detectors_from_source()
 
 
 def get_all_detectors() -> Dict[str, DetectorInfo]:
