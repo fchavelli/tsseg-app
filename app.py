@@ -165,8 +165,8 @@ APP_THEME = gr.themes.Base(
     primary_hue=gr.themes.colors.slate,
     secondary_hue=gr.themes.colors.blue,
     neutral_hue=gr.themes.colors.gray,
-    font=gr.themes.GoogleFont("Inter"),
-    font_mono=gr.themes.GoogleFont("JetBrains Mono"),
+    font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    font_mono=[gr.themes.GoogleFont("JetBrains Mono"), "ui-monospace", "monospace"],
 ).set(
     button_primary_background_fill="#2d3748",
     button_primary_background_fill_hover="#4a5568",
