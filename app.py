@@ -188,8 +188,6 @@ def create_app() -> gr.Blocks:
 
     with gr.Blocks(
         title="tsseg — Time Series Segmentation",
-        css=APP_CSS,
-        theme=APP_THEME,
     ) as app:
         # -- Shared state --
         data_state = gr.State(value=None)          # TimeSeriesData
@@ -932,4 +930,6 @@ if __name__ == "__main__":
         server_port=7860,
         share=False,
         show_error=True,
+        css=APP_CSS,
+        theme=APP_THEME,
     )

@@ -4,7 +4,7 @@ emoji: 📈
 colorFrom: indigo
 colorTo: blue
 sdk: gradio
-sdk_version: "4.44.0"
+sdk_version: "6.6.0"
 python_version: "3.10"
 app_file: app.py
 pinned: false
@@ -14,7 +14,7 @@ pinned: false
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://gradio.app"><img src="https://img.shields.io/badge/Gradio-4.44-orange?style=for-the-badge&logo=gradio" alt="Gradio"></a>
+  <a href="https://gradio.app"><img src="https://img.shields.io/badge/Gradio-6.x-orange?style=for-the-badge&logo=gradio" alt="Gradio"></a>
   <a href="https://huggingface.co/spaces/fchavelli/tsseg"><img src="https://img.shields.io/badge/🤗-HuggingFace%20Space-yellow?style=for-the-badge" alt="HF Space"></a>
   <a href="https://github.com/fchavelli/tsseg/blob/main/LICENSE"><img src="https://img.shields.io/github/license/fchavelli/tsseg?color=blue&style=for-the-badge" alt="License"></a>
 </p>

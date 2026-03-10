@@ -2,8 +2,7 @@
 tsseg @ git+https://github.com/fchavelli/tsseg.git
 
 # Web framework
-gradio>=4.44,<5
-huggingface_hub>=0.19.3,<0.30
+gradio>=6,<7
 
 # Plotting
 plotly>=5.18
