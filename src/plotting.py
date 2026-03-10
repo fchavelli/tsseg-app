@@ -253,20 +253,45 @@ def make_multi_comparison_figure(
 
 
 def make_metrics_bar_chart(scores_df) -> go.Figure:
-    """Bar chart comparing metric scores across algorithms."""
+    """Bar chart comparing metric scores across algorithms.
+
+    Colors are grouped semantically:
+    - F1-related metrics → blue palette
+    - Covering metrics → green palette
+    - State detection metrics → purple/orange palette
+    """
     import pandas as pd
     if not isinstance(scores_df, pd.DataFrame) or scores_df.empty:
         return go.Figure()
+
+    # Semantic color mapping for metrics
+    _METRIC_COLORS = {
+        # F1-related → blues
+        "F1 Score": "#1f77b4",
+        "F1 Score (precision)": "#4a9ecf",
+        "F1 Score (recall)": "#7ec4e8",
+        # Covering → greens
+        "Covering": "#2ca02c",
+        "Bidirectional Covering": "#5cc85c",
+        # State metrics → warm tones
+        "Adjusted Rand Index": "#d62728",
+        "Normalized Mutual Information": "#e87d2e",
+        "Adjusted Mutual Information": "#f0a050",
+        "Weighted ARI": "#9467bd",
+        "Weighted NMI": "#b694d4",
+        "State Matching Score": "#8c564b",
+    }
 
     fig = go.Figure()
     metric_cols = [c for c in scores_df.columns if c != "Algorithm"]
 
     for i, metric in enumerate(metric_cols):
+        color = _METRIC_COLORS.get(metric, _BASE_COLORS[i % len(_BASE_COLORS)])
         fig.add_trace(go.Bar(
             x=scores_df["Algorithm"],
             y=scores_df[metric],
             name=metric,
-            marker_color=_BASE_COLORS[i % len(_BASE_COLORS)],
+            marker_color=color,
         ))
 
     fig.update_layout(

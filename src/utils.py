@@ -3,10 +3,39 @@
 from __future__ import annotations
 
 import ast
-from typing import Any, Sequence
+import concurrent.futures
+from typing import Any, Callable, Sequence
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+
+
+# ---------------------------------------------------------------------------
+# Execution timeout
+# ---------------------------------------------------------------------------
+
+DEFAULT_TIMEOUT = 300  # seconds
+
+
+class ExecutionTimeoutError(Exception):
+    """Raised when a detector exceeds the allowed execution time."""
+
+
+def run_with_timeout(fn: Callable, *args, timeout: int = DEFAULT_TIMEOUT, **kwargs) -> Any:
+    """Run *fn* in a thread with a timeout.
+
+    Raises ``ExecutionTimeoutError`` if the function does not return in
+    *timeout* seconds.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(fn, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            raise ExecutionTimeoutError(
+                f"Execution timed out after {timeout}s. "
+                f"Try a smaller dataset or simpler algorithm parameters."
+            ) from None
 
 
 def states_to_change_points(states: Sequence[int]) -> list[int]:

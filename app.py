@@ -34,7 +34,7 @@ from src.data import (
     load_mocap_dataset,
 )
 from src.metrics import compute_metrics, get_metrics_for_task
-from src.params import get_param_info
+from src.params import build_data_context, get_param_info, validate_params_for_detector
 from src.plotting import (
     build_segment_color_map,
     make_annotation_figure,
@@ -44,11 +44,13 @@ from src.plotting import (
     make_signal_figure,
 )
 from src.utils import (
+    ExecutionTimeoutError,
     align_states_via_hungarian,
     change_points_to_states,
     interpret_predictions,
     normalize_zscore,
     parse_user_value,
+    run_with_timeout,
     states_to_change_points,
 )
 
@@ -75,6 +77,26 @@ MAX_EXECUTION_TIME = 300  # seconds
 # ============================================================================
 
 
+def _format_params(params: dict) -> str:
+    """Format a params dict for display in the comparison table.
+
+    Instead of raw JSON like ``{"n_cps": "6", "model": "rbf"}``,
+    produce a readable string like ``n_cps=6, model=rbf``.
+    """
+    if not params:
+        return "—"
+    parts = []
+    for k, v in params.items():
+        # Strip quotes from string values
+        v_str = str(v).strip("'\"")
+        parts.append(f"{k}={v_str}")
+    text = ", ".join(parts)
+    # Truncate if too long
+    if len(text) > 100:
+        text = text[:97] + "…"
+    return text
+
+
 def _get_detector_choices(task_label: str) -> list[str]:
     """Get sorted list of detector names for a given task label.
 
@@ -99,25 +121,26 @@ def _run_detector(
     params: Dict[str, Any],
     signal: np.ndarray,
 ) -> Any:
-    """Run a detector on a signal and return raw output."""
+    """Run a detector on a signal and return raw output (with timeout)."""
     instance = instantiate_detector(detector_info.cls, params)
     signal_norm = normalize_zscore(signal)
 
-    try:
-        if hasattr(instance, "fit_predict"):
-            output = instance.fit_predict(signal_norm, axis=0)
-        else:
-            instance.fit(signal_norm, axis=0)
-            if hasattr(instance, "predict"):
-                output = instance.predict(signal_norm, axis=0)
-            elif hasattr(instance, "transform"):
-                output = instance.transform(signal_norm)
+    def _execute():
+        try:
+            if hasattr(instance, "fit_predict"):
+                return instance.fit_predict(signal_norm, axis=0)
             else:
-                raise RuntimeError("Detector does not expose predict/transform")
-    except Exception as exc:
-        raise RuntimeError(f"Execution failed: {exc}") from exc
+                instance.fit(signal_norm, axis=0)
+                if hasattr(instance, "predict"):
+                    return instance.predict(signal_norm, axis=0)
+                elif hasattr(instance, "transform"):
+                    return instance.transform(signal_norm)
+                else:
+                    raise RuntimeError("Detector does not expose predict/transform")
+        except Exception as exc:
+            raise RuntimeError(f"Execution failed: {exc}") from exc
 
-    return output
+    return run_with_timeout(_execute, timeout=MAX_EXECUTION_TIME)
 
 
 # ============================================================================
@@ -168,7 +191,9 @@ def create_app() -> gr.Blocks:
     ) as app:
         # -- Shared state --
         data_state = gr.State(value=None)          # TimeSeriesData
+        data_ctx_state = gr.State(value=None)       # dict {n_samples, n_channels}
         runs_state = gr.State(value=[])             # list of run dicts
+        last_run_state = gr.State(value=None)       # last run result dict (for add-to-comparison)
 
         # -- Header --
         gr.Markdown(
@@ -232,6 +257,7 @@ def create_app() -> gr.Blocks:
                             )
 
                         load_btn = gr.Button("Load Data", variant="primary", elem_classes="run-btn")
+                        load_example_btn = gr.Button("Load Example (MoCap)", variant="secondary")
 
                     with gr.Column(scale=3):
                         data_info = gr.Markdown("*No data loaded yet.*")
@@ -268,7 +294,7 @@ def create_app() -> gr.Blocks:
                             ts_data = load_mocap_dataset(trial=int(trial))
                         elif source == "Upload CSV":
                             if file is None:
-                                return None, "*Please upload a CSV file.*", None
+                                return None, None, "*Please upload a CSV file.*", None
                             sep = "\t" if separator == "\\t" else separator
                             ts_data = load_csv(
                                 file_path=file.name if hasattr(file, 'name') else file,
@@ -277,7 +303,7 @@ def create_app() -> gr.Blocks:
                                 label_column=label_col if label_col.strip() else None,
                             )
                         else:
-                            return None, "*Unknown data source.*", None
+                            return None, None, "*Unknown data source.*", None
 
                         # Build info markdown
                         if ts_data.has_ground_truth:
@@ -301,10 +327,13 @@ def create_app() -> gr.Blocks:
                         else:
                             fig = make_signal_figure(ts_data.signal, ts_data.name)
 
-                        return ts_data, info_md, fig
+                        # Build data context for parameter constraints
+                        ctx = build_data_context(ts_data.signal, n_channels=ts_data.n_dims)
+
+                        return ts_data, ctx, info_md, fig
 
                     except Exception as e:
-                        return None, f"**Error:** {e}", None
+                        return None, None, f"**Error:** {e}", None
 
                 load_btn.click(
                     load_data,
@@ -313,7 +342,32 @@ def create_app() -> gr.Blocks:
                         synth_complexity, synth_noise, synth_seed,
                         mocap_trial, csv_file, csv_separator, csv_header, csv_label_col,
                     ],
-                    outputs=[data_state, data_info, data_plot],
+                    outputs=[data_state, data_ctx_state, data_info, data_plot],
+                )
+
+                # -- Load Example handler (MoCap trial 0) --
+                def load_example():
+                    try:
+                        ts_data = load_mocap_dataset(trial=0)
+                        ctx = build_data_context(ts_data.signal, n_channels=ts_data.n_dims)
+                        n_states = ts_data.n_states
+                        color_map = build_segment_color_map(n_states, ts_data.n_dims)
+                        fig = make_annotation_figure(
+                            ts_data.signal, ts_data.change_points or [],
+                            ts_data.ground_truth, ts_data.name, color_map,
+                        )
+                        info_md = (
+                            f"**{ts_data.name}** — "
+                            f"{ts_data.length} timestamps, {ts_data.n_dims} dim. "
+                            f"| Ground truth available ({ts_data.n_states} states)"
+                        )
+                        return ts_data, ctx, info_md, fig
+                    except Exception as e:
+                        return None, None, f"**Error:** {e}", None
+
+                load_example_btn.click(
+                    load_example,
+                    outputs=[data_state, data_ctx_state, data_info, data_plot],
                 )
 
             # ==================================================================
@@ -343,8 +397,8 @@ def create_app() -> gr.Blocks:
                         task_selector.change(update_detectors, inputs=[task_selector], outputs=[detector_dropdown])
 
                         # Dynamic parameters zone
-                        @gr.render(inputs=[detector_dropdown])
-                        def render_params(detector_name):
+                        @gr.render(inputs=[detector_dropdown, data_ctx_state])
+                        def render_params(detector_name, data_ctx):
                             if not detector_name or detector_name not in all_detectors:
                                 gr.Markdown("*Select an algorithm to configure.*")
                                 return
@@ -361,24 +415,53 @@ def create_app() -> gr.Blocks:
                             else:
                                 gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}")
 
-                            param_infos = get_param_info(info.cls)
+                            param_infos = get_param_info(info.cls, data_ctx=data_ctx)
                             if not param_infos:
                                 gr.Markdown("*No configurable parameters.*")
                             else:
                                 gr.Markdown("#### Parameters")
 
+                            # Show warnings for auto-adjusted defaults
+                            adjustments = [
+                                p["adjust_reason"]
+                                for p in param_infos
+                                if p.get("adjusted")
+                            ]
+                            if adjustments:
+                                adj_md = "\n".join(f"- {a}" for a in adjustments)
+                                gr.Markdown(
+                                    f"⚠️ **Parameters auto-adjusted:**\n{adj_md}",
+                                )
+
                             components = {}
+                            current_group = ""
                             for p in param_infos:
+                                # Group headers (from param_schema groups)
+                                grp = p.get("group", "")
+                                if grp and grp != current_group:
+                                    current_group = grp
+                                    gr.Markdown(f"**{grp.replace('_', ' ').title()}**")
+
                                 key = f"p_{detector_name}_{p['name']}"
+                                desc = p.get("description", "") or None
+                                bounds = ""
+                                if p.get("min") is not None or p.get("max") is not None:
+                                    lo = p.get("min", "")
+                                    hi = p.get("max", "")
+                                    bounds = f" [{lo}–{hi}]"
+                                info_text = (desc + bounds) if desc else (bounds.strip() or None)
+
                                 if p["type"] == "bool":
                                     components[p["name"]] = gr.Checkbox(
                                         value=p["default"], label=p["name"], key=key,
+                                        info=desc,
                                         interactive=True,
                                     )
                                 elif p["type"] == "int":
                                     components[p["name"]] = gr.Number(
                                         value=p["default"],
                                         label=p["name"],
+                                        info=info_text,
                                         key=key,
                                         precision=0,
                                         interactive=True,
@@ -387,6 +470,7 @@ def create_app() -> gr.Blocks:
                                     components[p["name"]] = gr.Number(
                                         value=p["default"],
                                         label=p["name"],
+                                        info=info_text,
                                         key=key,
                                         interactive=True,
                                     )
@@ -395,6 +479,7 @@ def create_app() -> gr.Blocks:
                                         choices=p["choices"],
                                         value=p["default"],
                                         label=p["name"],
+                                        info=desc,
                                         key=key,
                                         interactive=True,
                                     )
@@ -402,6 +487,7 @@ def create_app() -> gr.Blocks:
                                     components[p["name"]] = gr.Textbox(
                                         value=str(p["default"]) if p["default"] is not None else "",
                                         label=p["name"],
+                                        info=desc,
                                         key=key,
                                         interactive=True,
                                     )
@@ -410,7 +496,7 @@ def create_app() -> gr.Blocks:
                                     components[p["name"]] = gr.Textbox(
                                         value=default_str,
                                         label=p["name"],
-                                        info="Python literal syntax (e.g., [1,2,3] or None)",
+                                        info=desc or "Python literal syntax (e.g., [1,2,3] or None)",
                                         key=key,
                                         interactive=True,
                                     )
@@ -423,10 +509,11 @@ def create_app() -> gr.Blocks:
 
                             def run_segmentation(*args):
                                 ts_data = args[0]
-                                param_vals = args[1:]
+                                cur_data_ctx = args[1]
+                                param_vals = args[2:]
 
                                 if ts_data is None:
-                                    return "Load data first (Data tab).", None
+                                    return "Load data first (Data tab).", None, None
 
                                 params = {}
                                 for i, p in enumerate(param_infos):
@@ -444,6 +531,17 @@ def create_app() -> gr.Blocks:
                                         except (ValueError, TypeError):
                                             pass
                                     params[p["name"]] = val
+
+                                # --- Validate & auto-adjust params via schema ---
+                                params, v_warnings, v_errors = validate_params_for_detector(
+                                    info.cls, params, data_ctx=cur_data_ctx,
+                                )
+                                if v_errors:
+                                    err_md = "\n".join(f"- {e}" for e in v_errors)
+                                    warn_md = ""
+                                    if v_warnings:
+                                        warn_md = "\n\n⚠️ Adjustments:\n" + "\n".join(f"- {w}" for w in v_warnings)
+                                    return f"**Validation errors:**\n{err_md}{warn_md}", None, None
 
                                 expect_states = (info.detector_type == "state_detection")
 
@@ -483,83 +581,83 @@ def create_app() -> gr.Blocks:
                                         f"**{detector_name}** — {elapsed:.2f}s — "
                                         f"{n_cps} change points, {n_st} states"
                                     )
-                                    return result_md, fig
+                                    if v_warnings:
+                                        result_md += "\n\n⚠️ " + " · ".join(v_warnings)
 
-                                except Exception as e:
-                                    tb = traceback.format_exc()
-                                    logger.error(f"Detector failed: {tb}")
-                                    return f"**Error:** {e}", None
-
-                            run_btn.click(
-                                run_segmentation,
-                                inputs=[data_state] + list(components.values()),
-                                outputs=[seg_feedback, seg_result_plot],
-                            )
-
-                            def add_to_comparison(*args):
-                                ts_data = args[0]
-                                current_runs = args[1]
-                                param_vals = args[2:]
-
-                                if ts_data is None:
-                                    return current_runs, "Load data first."
-
-                                params = {}
-                                for i, p in enumerate(param_infos):
-                                    val = param_vals[i] if i < len(param_vals) else p["default"]
-                                    if p["type"] == "text" and isinstance(val, str):
-                                        val = parse_user_value(val, p["default"])
-                                    if p["type"] == "int" and val is not None:
-                                        try:
-                                            val = int(val)
-                                        except (ValueError, TypeError):
-                                            pass
-                                    if p["type"] == "float" and val is not None:
-                                        try:
-                                            val = float(val)
-                                        except (ValueError, TypeError):
-                                            pass
-                                    params[p["name"]] = val
-
-                                expect_states = (info.detector_type == "state_detection")
-
-                                try:
-                                    output = _run_detector(info, params, ts_data.signal)
-                                    pred_states, pred_cps = interpret_predictions(
-                                        output, ts_data.length, expect_states
-                                    )
-                                    if expect_states and pred_states is not None and ts_data.has_ground_truth:
-                                        pred_states = align_states_via_hungarian(
-                                            ts_data.ground_truth, pred_states
-                                        )
-                                        pred_cps = states_to_change_points(pred_states)
-
-                                    run_entry = {
+                                    # Store result for add-to-comparison
+                                    last_run = {
                                         "name": detector_name,
                                         "params": {k: str(v) for k, v in params.items()},
                                         "pred_states": pred_states.tolist() if pred_states is not None else None,
                                         "pred_cps": pred_cps if pred_cps else [],
                                         "task": info.detector_type,
                                     }
-
-                                    if current_runs is None:
-                                        current_runs = []
-                                    updated = current_runs + [run_entry]
-                                    return updated, f"**{detector_name}** added ({len(updated)} runs total)"
+                                    return result_md, fig, last_run
 
                                 except Exception as e:
-                                    return current_runs, f"**Error:** {e}"
+                                    tb = traceback.format_exc()
+                                    logger.error(f"Detector failed: {tb}")
+                                    return f"**Error:** {e}", None, None
+
+                            run_btn.click(
+                                run_segmentation,
+                                inputs=[data_state, data_ctx_state] + list(components.values()),
+                                outputs=[seg_feedback, seg_result_plot, last_run_state],
+                            ).then(
+                                lambda fig: gr.update(visible=fig is None),
+                                inputs=[seg_result_plot],
+                                outputs=[seg_data_preview],
+                            )
+
+                            def add_to_comparison(last_run, current_runs):
+                                """Add the last run result to the comparison list.
+
+                                Reuses the stored result from the last 'Run' click
+                                instead of re-running the detector (which would give
+                                different results for non-deterministic algorithms).
+                                """
+                                if last_run is None:
+                                    return current_runs or [], "Run the algorithm first before adding to comparison."
+
+                                if current_runs is None:
+                                    current_runs = []
+                                updated = current_runs + [last_run]
+                                name = last_run.get("name", "?")
+                                return updated, f"**{name}** added ({len(updated)} runs total)"
 
                             add_btn.click(
                                 add_to_comparison,
-                                inputs=[data_state, runs_state] + list(components.values()),
+                                inputs=[last_run_state, runs_state],
                                 outputs=[runs_state, seg_feedback],
                             )
 
-                    # -- RIGHT: results plot (always visible, updates on Run) --
+                    # -- RIGHT: results plot (always visible, updates on Run / data load) --
                     with gr.Column(scale=2):
                         seg_result_info = gr.Markdown("*Run an algorithm to see results here.*")
+                        seg_data_preview = gr.Plot(label="Data preview", visible=True)
                         seg_result_plot = gr.Plot(label="Segmentation result")
+
+                # Auto-display data in Segmentation tab when data changes
+                # Also reset the segmentation result plot so preview is visible again
+                def update_seg_on_data_change(ts_data):
+                    if ts_data is None:
+                        return gr.update(visible=False), gr.update(value=None)
+                    if ts_data.has_ground_truth:
+                        n_states = ts_data.n_states
+                        color_map = build_segment_color_map(n_states, ts_data.n_dims)
+                        fig = make_annotation_figure(
+                            ts_data.signal, ts_data.change_points or [],
+                            ts_data.ground_truth, ts_data.name, color_map,
+                        )
+                    else:
+                        fig = make_signal_figure(ts_data.signal, ts_data.name)
+                    return gr.update(value=fig, visible=True), gr.update(value=None)
+
+                data_state.change(
+                    update_seg_on_data_change,
+                    inputs=[data_state],
+                    outputs=[seg_data_preview, seg_result_plot],
+                )
 
             # ==================================================================
             # TAB 3 — COMPARISON
@@ -597,7 +695,7 @@ def create_app() -> gr.Blocks:
                             "Task": TASK_LABELS_INV.get(run.get("task", ""), run.get("task", "")),
                             "# CPs": len(pc),
                             "# States": int(np.max(ps) + 1) if ps is not None else "—",
-                            "Params": json.dumps(run.get("params", {}), default=str)[:80],
+                            "Params": _format_params(run.get("params", {})),
                         })
 
                     fig = make_multi_comparison_figure(
@@ -650,23 +748,27 @@ def create_app() -> gr.Blocks:
                         )
                         state_metrics_cb = gr.CheckboxGroup(
                             choices=state_metric_names,
-                            value=state_metric_names,
+                            value=[m for m in state_metric_names if m != "Adjusted Mutual Information"],
                             label="State Metrics",
                             visible=False,
                         )
 
-                        f1_margin = gr.Slider(1, 50, value=5, step=1, label="F1 Score margin")
+                        f1_margin = gr.Slider(1, 50, value=5, step=1, label="F1 Score margin", visible=True)
 
                         evaluate_btn = gr.Button("Evaluate All Runs", variant="primary", elem_classes="run-btn")
 
                         def toggle_eval_metrics(task_label):
                             is_cpd = task_label == "Change Point Detection"
-                            return gr.update(visible=is_cpd), gr.update(visible=not is_cpd)
+                            return (
+                                gr.update(visible=is_cpd),
+                                gr.update(visible=not is_cpd),
+                                gr.update(visible=is_cpd),
+                            )
 
                         eval_task.change(
                             toggle_eval_metrics,
                             inputs=[eval_task],
-                            outputs=[cpd_metrics_cb, state_metrics_cb],
+                            outputs=[cpd_metrics_cb, state_metrics_cb, f1_margin],
                         )
 
                     with gr.Column(scale=3):
@@ -693,16 +795,28 @@ def create_app() -> gr.Blocks:
                         metric_params["F1 Score"] = {"margin": int(margin)}
 
                     all_results = []
+                    skipped = []
                     for i, run in enumerate(runs):
+                        run_task = run.get("task", "change_point_detection")
                         pred_cps = run.get("pred_cps", [])
                         pred_states = np.array(run["pred_states"]) if run.get("pred_states") else None
+
+                        # Block incompatible task/metric combinations
+                        if task == "state_detection" and run_task == "change_point_detection":
+                            # CPD-only algo cannot be evaluated with SD metrics
+                            skipped.append(
+                                f"{i+1}. {run['name']} (CPD-only — incompatible with State Detection metrics)"
+                            )
+                            continue
 
                         if task == "change_point_detection":
                             y_pred = change_points_to_states(pred_cps, ts_data.length)
                         else:
+                            # State Detection evaluation
                             y_pred = pred_states if pred_states is not None else change_points_to_states(pred_cps, ts_data.length)
 
                         if y_pred is None:
+                            skipped.append(f"{i+1}. {run['name']} (no valid predictions)")
                             continue
 
                         scores = compute_metrics(
@@ -710,6 +824,16 @@ def create_app() -> gr.Blocks:
                             selected_metrics=selected,
                             metric_params=metric_params,
                         )
+
+                        # Filter out Bidirectional Covering sub-scores
+                        scores = {
+                            k: v for k, v in scores.items()
+                            if not (
+                                k.startswith("Bidirectional Covering (")
+                                and k != "Bidirectional Covering"
+                            )
+                        }
+
                         scores["Algorithm"] = f"{i+1}. {run['name']}"
                         all_results.append(scores)
 
@@ -722,6 +846,8 @@ def create_app() -> gr.Blocks:
 
                     chart = make_metrics_bar_chart(df)
                     info = f"Evaluated **{len(all_results)}** runs with **{len(selected)}** metrics."
+                    if skipped:
+                        info += f"\n\nSkipped (no valid predictions): {', '.join(skipped)}"
 
                     return info, df, chart
 

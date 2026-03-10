@@ -116,6 +116,73 @@ class TestParams:
         assert "model" in ranges
         assert "l2" in ranges["model"]
 
+    def test_param_info_uses_schema(self):
+        """Schema-based detectors return descriptions and groups."""
+        from src.algorithms import get_all_detectors
+        from src.params import get_param_info
+
+        detectors = get_all_detectors()
+        if "BOCDDetector" in detectors:
+            params = get_param_info(detectors["BOCDDetector"].cls)
+            assert len(params) > 0
+            # Schema provides descriptions
+            p_map = {p["name"]: p for p in params}
+            if "hazard_lambda" in p_map:
+                assert p_map["hazard_lambda"].get("description")
+
+    def test_param_info_data_ctx_adjusts_bounds(self):
+        """When data_ctx is provided, bounds reflect data dimensions."""
+        from src.algorithms import get_all_detectors
+        from src.params import get_param_info
+
+        detectors = get_all_detectors()
+        # E2USD has DataDependent: window_size * 2 <= n_samples
+        if "E2USDDetector" in detectors:
+            ctx = {"n_samples": 100, "n_channels": 1}
+            params = get_param_info(detectors["E2USDDetector"].cls, data_ctx=ctx)
+            p_map = {p["name"]: p for p in params}
+            ws = p_map.get("window_size")
+            if ws and "max" in ws:
+                assert ws["max"] <= 100, f"window_size max should be <= n_samples, got {ws['max']}"
+
+    def test_param_info_auto_clamp_default(self):
+        """Default values are clamped when they exceed data bounds."""
+        from src.algorithms import get_all_detectors
+        from src.params import get_param_info
+
+        detectors = get_all_detectors()
+        if "E2USDDetector" in detectors:
+            # E2USD has window_size=256 by default, which is too big for 100 samples
+            ctx = {"n_samples": 100, "n_channels": 1}
+            params = get_param_info(detectors["E2USDDetector"].cls, data_ctx=ctx)
+            p_map = {p["name"]: p for p in params}
+            ws = p_map.get("window_size")
+            if ws:
+                assert ws["default"] <= 100, f"Expected window_size default clamped, got {ws['default']}"
+                assert ws.get("adjusted") is True
+
+    def test_build_data_context(self):
+        from src.params import build_data_context
+
+        signal = np.random.randn(500, 3)
+        ctx = build_data_context(signal)
+        assert ctx["n_samples"] == 500
+        assert ctx["n_channels"] == 3
+
+    def test_validate_params_for_detector(self):
+        from src.algorithms import get_all_detectors
+        from src.params import validate_params_for_detector
+
+        detectors = get_all_detectors()
+        if "PeltDetector" in detectors:
+            cls = detectors["PeltDetector"].cls
+            params = {"model": "l2", "penalty": 10.0}
+            adj, warnings, errors = validate_params_for_detector(cls, params)
+            # Should not crash, may or may not have errors
+            assert isinstance(adj, dict)
+            assert isinstance(warnings, list)
+            assert isinstance(errors, list)
+
 
 class TestMetrics:
     def test_compute_cpd_metrics(self):

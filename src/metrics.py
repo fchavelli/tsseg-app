@@ -12,7 +12,6 @@ from tsseg.metrics import (
     BidirectionalCovering,
     Covering,
     F1Score,
-    HausdorffDistance,
     NormalizedMutualInformation,
     StateMatchingScore,
     WeightedAdjustedRandIndex,
@@ -21,26 +20,26 @@ from tsseg.metrics import (
 
 # -- Registry of metrics by task type --
 
+# NOTE: The app always passes per-timestep state labels (not change point
+# index lists) to metric.compute().  Every CPD metric therefore needs
+# ``convert_labels_to_segments=True`` so that labels are automatically
+# converted to the [0, cp1, cp2, …, T] format that the metrics expect.
+
 CPD_METRICS = {
     "F1 Score": {
         "class": F1Score,
-        "default_params": {"margin": 5},
+        "default_params": {"margin": 5, "convert_labels_to_segments": True},
         "description": "F1, precision, recall with margin tolerance",
     },
     "Covering": {
         "class": Covering,
-        "default_params": {},
+        "default_params": {"convert_labels_to_segments": True},
         "description": "Segment-wise IoU weighted by segment duration",
     },
     "Bidirectional Covering": {
         "class": BidirectionalCovering,
-        "default_params": {"aggregation": "harmonic"},
+        "default_params": {"aggregation": "harmonic", "convert_labels_to_segments": True},
         "description": "Bidirectional covering (truth→pred + pred→truth)",
-    },
-    "Hausdorff Distance": {
-        "class": HausdorffDistance,
-        "default_params": {},
-        "description": "Hausdorff distance between change point sets",
     },
 }
 
@@ -99,9 +98,9 @@ def compute_metrics(
     Parameters
     ----------
     y_true : np.ndarray
-        Ground truth labels (state labels or change point indices via conversion).
+        Ground truth state labels (one integer per timestep).
     y_pred : np.ndarray
-        Predicted labels.
+        Predicted state labels (one integer per timestep).
     task : str
         "change_point_detection" or "state_detection".
     selected_metrics : list of str, optional
@@ -124,6 +123,7 @@ def compute_metrics(
         try:
             metric_instance = info["class"](**params)
             output = metric_instance.compute(y_true, y_pred)
+
             score = output.get("score", None)
             if score is not None:
                 results[metric_name] = round(float(score), 4)
