@@ -105,6 +105,16 @@ def _infer_category(name: str) -> str:
     return "Other"
 
 
+# Detectors excluded from the app (broken dependencies, unavailable on HF, etc.)
+_EXCLUDED_DETECTORS: set[str] = {
+    "PatssDetector",   # pattern mining – missing deps
+    "VQTSSDetector",   # deep learning – missing deps
+    "VSAXDetector",    # symbolic – broken on HF
+    "AutoPlaitDetector",  # requires C binary not available on HF
+    "TSCP2Detector",   # requires tensorflow not shipped on HF
+}
+
+
 def _iter_exported_detectors_from_package() -> Iterable[Tuple[str, type]]:
     """Iterate detectors through ``tsseg.algorithms.__all__``.
 
@@ -205,9 +215,12 @@ def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
 
 
 def get_all_detectors() -> Dict[str, DetectorInfo]:
-    """Return all detectors with metadata."""
+    """Return all detectors with metadata (excluding broken/unavailable ones)."""
     results: Dict[str, DetectorInfo] = {}
     for name, cls in _iter_exported_detectors():
+        if name in _EXCLUDED_DETECTORS:
+            logger.debug("Excluding detector %s (in _EXCLUDED_DETECTORS)", name)
+            continue
         tags = getattr(cls, "_tags", {}) or {}
         detector_type = tags.get("detector_type", "unknown")
         info = DetectorInfo(

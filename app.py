@@ -241,6 +241,9 @@ def create_app() -> gr.Blocks:
                                 label="Recurring states",
                                 info="Allow state labels to repeat across segments",
                             )
+                            synth_min_seg = gr.Slider(5, 200, value=20, step=5,
+                                                      label="Min segment length",
+                                                      info="Minimum number of timestamps per segment")
                             synth_noise = gr.Slider(0.0, 2.0, value=0.5, step=0.05, label="Noise level")
                             synth_seed = gr.Number(value=42, label="Random seed", precision=0)
 
@@ -285,7 +288,7 @@ def create_app() -> gr.Blocks:
                 )
 
                 # -- Load data handler --
-                def load_data(source, length, segments, dims, pattern, recurring, noise, seed,
+                def load_data(source, length, segments, dims, pattern, recurring, min_seg, noise, seed,
                               trial, file, separator, header, label_col):
                     try:
                         if source == "Synthetic":
@@ -296,6 +299,7 @@ def create_app() -> gr.Blocks:
                                 pattern=pattern,
                                 noise_level=noise,
                                 recurring_states=recurring,
+                                min_segment_length=int(min_seg),
                                 random_state=int(seed) if seed is not None else None,
                             )
                         elif source == "MoCap (built-in)":
@@ -347,7 +351,7 @@ def create_app() -> gr.Blocks:
                     load_data,
                     inputs=[
                         data_source, synth_length, synth_segments, synth_dims,
-                        synth_pattern, synth_recurring, synth_noise, synth_seed,
+                        synth_pattern, synth_recurring, synth_min_seg, synth_noise, synth_seed,
                         mocap_trial, csv_file, csv_separator, csv_header, csv_label_col,
                     ],
                     outputs=[data_state, data_ctx_state, data_info, data_plot],
@@ -412,16 +416,9 @@ def create_app() -> gr.Blocks:
                                 return
 
                             info = all_detectors[detector_name]
-                            deps = info.dependencies
 
                             task_type = "State Detection" if info.detector_type == "state_detection" else "CPD"
-                            if deps:
-                                gr.Markdown(
-                                    f"**{detector_name}** · {task_type} · {info.category}  \n"
-                                    f"Requires: {', '.join(deps)} (CPU)"
-                                )
-                            else:
-                                gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}")
+                            gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}")
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)
                             if not param_infos:
@@ -466,14 +463,45 @@ def create_app() -> gr.Blocks:
                                         interactive=True,
                                     )
                                 elif p["type"] == "int":
-                                    components[p["name"]] = gr.Number(
-                                        value=p["default"],
-                                        label=p["name"],
-                                        info=info_text,
-                                        key=key,
-                                        precision=0,
-                                        interactive=True,
-                                    )
+                                    is_n_cps = p["name"] in ("n_cps", "n_bkps", "n_components")
+                                    if is_n_cps:
+                                        with gr.Row():
+                                            num_comp = gr.Number(
+                                                value=p["default"],
+                                                label=p["name"],
+                                                info=info_text,
+                                                key=key,
+                                                precision=0,
+                                                interactive=True,
+                                                scale=3,
+                                            )
+                                            gt_btn = gr.Button(
+                                                "Use GT", variant="secondary",
+                                                scale=1, min_width=70,
+                                                key=f"gt_{detector_name}_{p['name']}",
+                                            )
+
+                                        def _set_gt_value(ts_data, _pname=p["name"]):
+                                            if ts_data is None or not ts_data.has_ground_truth:
+                                                return gr.update()
+                                            n_gt = len(ts_data.change_points) if ts_data.change_points else 0
+                                            return gr.update(value=n_gt)
+
+                                        gt_btn.click(
+                                            _set_gt_value,
+                                            inputs=[data_state],
+                                            outputs=[num_comp],
+                                        )
+                                        components[p["name"]] = num_comp
+                                    else:
+                                        components[p["name"]] = gr.Number(
+                                            value=p["default"],
+                                            label=p["name"],
+                                            info=info_text,
+                                            key=key,
+                                            precision=0,
+                                            interactive=True,
+                                        )
                                 elif p["type"] == "float":
                                     components[p["name"]] = gr.Number(
                                         value=p["default"],
@@ -518,10 +546,14 @@ def create_app() -> gr.Blocks:
                             def run_segmentation(*args):
                                 ts_data = args[0]
                                 cur_data_ctx = args[1]
-                                param_vals = args[2:]
+                                ui_task_label = args[2]
+                                param_vals = args[3:]
 
                                 if ts_data is None:
                                     return "Load data first (Data tab).", None, None
+
+                                # Resolve the UI task (may differ from detector_type)
+                                ui_task = TASK_LABELS.get(ui_task_label, "change_point_detection")
 
                                 params = {}
                                 for i, p in enumerate(param_infos):
@@ -581,7 +613,7 @@ def create_app() -> gr.Blocks:
                                         pred_states=pred_states,
                                         pred_cps=pred_cps,
                                         color_map=color_map,
-                                        task=info.detector_type,
+                                        task=ui_task,
                                     )
 
                                     n_cps = len(pred_cps) if pred_cps else 0
@@ -599,7 +631,7 @@ def create_app() -> gr.Blocks:
                                         "params": {k: str(v) for k, v in params.items()},
                                         "pred_states": pred_states.tolist() if pred_states is not None else None,
                                         "pred_cps": pred_cps if pred_cps else [],
-                                        "task": info.detector_type,
+                                        "task": ui_task,
                                     }
                                     return result_md, fig, last_run
 
@@ -610,7 +642,7 @@ def create_app() -> gr.Blocks:
 
                             run_btn.click(
                                 run_segmentation,
-                                inputs=[data_state, data_ctx_state] + list(components.values()),
+                                inputs=[data_state, data_ctx_state, task_selector] + list(components.values()),
                                 outputs=[seg_feedback, seg_result_plot, last_run_state],
                             ).then(
                                 lambda fig: gr.update(visible=fig is None),

@@ -14,3 +14,6 @@ scipy>=1.11
 
 # YAML config
 pyyaml>=6.0
+
+# Matrix profile (FLUSS detector)
+stumpy>=1.12

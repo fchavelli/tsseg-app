@@ -64,13 +64,20 @@ class SyntheticSeries:
     states: np.ndarray
 
 
-def _generate_boundaries(length: int, n_segments: int, rng: np.random.Generator) -> list[int]:
+def _generate_boundaries(
+    length: int,
+    n_segments: int,
+    rng: np.random.Generator,
+    min_segment_length: int = 20,
+) -> list[int]:
     if n_segments < 1:
         raise ValueError("n_segments must be >= 1")
     if length <= n_segments:
         raise ValueError("length must exceed number of segments")
+    if min_segment_length * n_segments > length:
+        min_segment_length = max(1, length // n_segments)
     proportions = rng.dirichlet(alpha=np.ones(n_segments))
-    segment_lengths = np.maximum(5, (proportions * length).astype(int))
+    segment_lengths = np.maximum(min_segment_length, (proportions * length).astype(int))
     delta = length - int(segment_lengths.sum())
     segment_lengths[0] += delta
     boundaries: list[int] = []
@@ -210,6 +217,7 @@ def generate_synthetic_series(
     pattern: PatternType = "sinusoidal",
     noise_level: float = 0.5,
     recurring_states: bool = False,
+    min_segment_length: int = 20,
     random_state: int | None = None,
 ) -> TimeSeriesData:
     """Generate a synthetic multivariate time series with labelled segments.
@@ -222,6 +230,8 @@ def generate_synthetic_series(
     recurring_states : bool
         If True, state labels can repeat (fewer distinct states than segments).
         Useful for testing state-detection algorithms.
+    min_segment_length : int
+        Minimum length of each segment (default 20).
     """
     if length <= 0:
         raise ValueError("length must be positive")
@@ -231,7 +241,10 @@ def generate_synthetic_series(
         raise ValueError("noise_level must be non-negative")
 
     rng = np.random.default_rng(random_state)
-    change_points = _generate_boundaries(length=length, n_segments=n_segments, rng=rng)
+    change_points = _generate_boundaries(
+        length=length, n_segments=n_segments, rng=rng,
+        min_segment_length=min_segment_length,
+    )
     boundaries = [0, *change_points, length]
 
     # Assign state labels
