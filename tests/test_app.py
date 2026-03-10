@@ -15,12 +15,21 @@ class TestData:
         assert ts.ground_truth is not None
         assert len(ts.change_points) == 2
 
-    def test_generate_synthetic_complexities(self):
+    def test_generate_synthetic_patterns(self):
         from src.data import generate_synthetic_series
 
-        for c in ("simple", "medium", "complex"):
-            ts = generate_synthetic_series(length=300, n_segments=2, complexity=c, random_state=0)
+        for p in ("constant", "sinusoidal", "step", "stairs", "linear", "mixed"):
+            ts = generate_synthetic_series(length=300, n_segments=2, pattern=p, random_state=0)
             assert ts.length == 300
+
+    def test_generate_synthetic_recurring(self):
+        from src.data import generate_synthetic_series
+
+        ts = generate_synthetic_series(length=500, n_segments=5, pattern="sinusoidal",
+                                       recurring_states=True, random_state=0)
+        assert ts.length == 500
+        # Fewer distinct states than segments
+        assert ts.n_states < 5
 
     def test_mocap_dataset(self):
         from src.data import load_mocap_dataset

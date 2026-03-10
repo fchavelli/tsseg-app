@@ -36,6 +36,7 @@ from src.data import (
 from src.metrics import compute_metrics, get_metrics_for_task
 from src.params import build_data_context, get_param_info, validate_params_for_detector
 from src.plotting import (
+    build_cpd_color_map,
     build_segment_color_map,
     make_annotation_figure,
     make_comparison_figure,
@@ -227,12 +228,18 @@ def create_app() -> gr.Blocks:
                         # -- Synthetic controls --
                         with gr.Group(visible=True) as synth_controls:
                             synth_length = gr.Slider(200, 10000, value=1000, step=50, label="Length")
-                            synth_segments = gr.Slider(2, 12, value=4, step=1, label="Segments")
+                            synth_segments = gr.Slider(2, 12, value=3, step=1, label="Segments")
                             synth_dims = gr.Slider(1, 8, value=2, step=1, label="Dimensions")
-                            synth_complexity = gr.Dropdown(
-                                choices=["simple", "medium", "complex"],
-                                value="medium",
-                                label="Complexity",
+                            synth_pattern = gr.Dropdown(
+                                choices=["constant", "sinusoidal", "step", "stairs", "linear", "mixed"],
+                                value="sinusoidal",
+                                label="Pattern",
+                                info="Intra-segment waveform shape",
+                            )
+                            synth_recurring = gr.Checkbox(
+                                value=False,
+                                label="Recurring states",
+                                info="Allow state labels to repeat across segments",
                             )
                             synth_noise = gr.Slider(0.0, 2.0, value=0.5, step=0.05, label="Noise level")
                             synth_seed = gr.Number(value=42, label="Random seed", precision=0)
@@ -278,7 +285,7 @@ def create_app() -> gr.Blocks:
                 )
 
                 # -- Load data handler --
-                def load_data(source, length, segments, dims, complexity, noise, seed,
+                def load_data(source, length, segments, dims, pattern, recurring, noise, seed,
                               trial, file, separator, header, label_col):
                     try:
                         if source == "Synthetic":
@@ -286,8 +293,9 @@ def create_app() -> gr.Blocks:
                                 length=int(length),
                                 n_segments=int(segments),
                                 n_dims=int(dims),
-                                complexity=complexity,
+                                pattern=pattern,
                                 noise_level=noise,
+                                recurring_states=recurring,
                                 random_state=int(seed) if seed is not None else None,
                             )
                         elif source == "MoCap (built-in)":
@@ -339,7 +347,7 @@ def create_app() -> gr.Blocks:
                     load_data,
                     inputs=[
                         data_source, synth_length, synth_segments, synth_dims,
-                        synth_complexity, synth_noise, synth_seed,
+                        synth_pattern, synth_recurring, synth_noise, synth_seed,
                         mocap_trial, csv_file, csv_separator, csv_header, csv_label_col,
                     ],
                     outputs=[data_state, data_ctx_state, data_info, data_plot],
@@ -573,6 +581,7 @@ def create_app() -> gr.Blocks:
                                         pred_states=pred_states,
                                         pred_cps=pred_cps,
                                         color_map=color_map,
+                                        task=info.detector_type,
                                     )
 
                                     n_cps = len(pred_cps) if pred_cps else 0
@@ -688,6 +697,7 @@ def create_app() -> gr.Blocks:
                             "name": f"{i+1}. {run['name']}",
                             "pred_states": ps,
                             "pred_cps": pc,
+                            "task": run.get("task", "change_point_detection"),
                         })
                         table_data.append({
                             "Run": i + 1,

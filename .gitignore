@@ -35,3 +35,6 @@ htmlcov/
 # Temp
 /tmp/
 *.tmp
+
+# Paper
+paper/

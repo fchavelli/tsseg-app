@@ -14,6 +14,9 @@ _BASE_COLORS = [
     "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
 ]
 
+# Neutral alternating grays for CPD predictions (no state semantics)
+_CPD_GRAYS = ["#555555", "#aaaaaa"]
+
 
 def _adjust_color_hex(hex_color: str, factor: float) -> str:
     hex_color = hex_color.lstrip("#")
@@ -29,6 +32,20 @@ def build_segment_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
     for idx in range(n_segments):
         base = _BASE_COLORS[idx % len(_BASE_COLORS)]
         segment_colors = [_adjust_color_hex(base, 0.15 * dim) for dim in range(n_dims)]
+        colors.append(segment_colors)
+    return colors
+
+
+def build_cpd_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
+    """Build an alternating neutral-gray color map for CPD predictions.
+
+    Uses two distinguishable gray shades that alternate across segments,
+    avoiding any implication of state identity.
+    """
+    colors = []
+    for idx in range(n_segments):
+        base = _CPD_GRAYS[idx % len(_CPD_GRAYS)]
+        segment_colors = [_adjust_color_hex(base, 0.10 * dim) for dim in range(n_dims)]
         colors.append(segment_colors)
     return colors
 
@@ -104,6 +121,36 @@ def make_signal_figure(signal: np.ndarray, title: str = "Signal") -> go.Figure:
     return fig
 
 
+def _make_cpd_prediction_figure(
+    signal: np.ndarray,
+    pred_cps: Sequence[int],
+) -> go.Figure:
+    """Build a prediction subplot with alternating neutral grays for CPD.
+
+    Does NOT imply state identity — only visually marks segment boundaries.
+    """
+    n_samples, n_dims = signal.shape
+    # Build alternating segments from CPs
+    boundaries = [0] + sorted(pred_cps) + [n_samples]
+    n_segs = len(boundaries) - 1
+    cpd_cmap = build_cpd_color_map(n_segs, n_dims)
+
+    fig = go.Figure()
+    for seg_idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
+        for dim in range(n_dims):
+            color = cpd_cmap[seg_idx % len(cpd_cmap)][dim % len(cpd_cmap[seg_idx % len(cpd_cmap)])]
+            fig.add_trace(go.Scatter(
+                x=np.arange(start, stop),
+                y=signal[start:stop, dim],
+                mode="lines",
+                line=dict(color=color, width=2),
+                showlegend=False,
+            ))
+    for cp in pred_cps:
+        fig.add_vline(x=cp, line=dict(color="#333333", width=1, dash="dash"))
+    return fig
+
+
 def make_comparison_figure(
     signal: np.ndarray,
     truth_states: Optional[Sequence[int]],
@@ -113,8 +160,14 @@ def make_comparison_figure(
     color_map: list[list[str]],
     *,
     fallback_states: Optional[Sequence[int]] = None,
+    task: str = "change_point_detection",
 ) -> go.Figure:
-    """Two-row figure contrasting ground-truth and predictions."""
+    """Two-row figure contrasting ground-truth and predictions.
+
+    For CPD-only algorithms (task='change_point_detection' and no native
+    pred_states), the prediction row uses neutral alternating grays to
+    avoid implying state identity.
+    """
     has_truth = truth_states is not None
     n_rows = 2 if has_truth else 1
     titles = (["Ground Truth", "Prediction"] if has_truth else ["Prediction"])
@@ -134,8 +187,18 @@ def make_comparison_figure(
             fig.add_shape(shape, row=1, col=1)
 
     pred_row = 2 if has_truth else 1
-    if pred_states is not None:
+    is_cpd = (task == "change_point_detection")
+
+    if pred_states is not None and not is_cpd:
+        # State Detection: use full state colors
         pred_fig = make_annotation_figure(signal, pred_cps or [], pred_states, "", color_map)
+        for trace in pred_fig.data:
+            fig.add_trace(trace, row=pred_row, col=1)
+        for shape in pred_fig.layout.shapes or []:
+            fig.add_shape(shape, row=pred_row, col=1)
+    elif pred_cps:
+        # CPD or CPD-only: neutral alternating grays
+        pred_fig = _make_cpd_prediction_figure(signal, pred_cps)
         for trace in pred_fig.data:
             fig.add_trace(trace, row=pred_row, col=1)
         for shape in pred_fig.layout.shapes or []:
@@ -156,9 +219,6 @@ def make_comparison_figure(
                 name=f"Dim {dim}",
                 showlegend=False,
             ), row=pred_row, col=1)
-        if pred_cps:
-            for cp in pred_cps:
-                fig.add_vline(x=cp, line=dict(color="#333333", width=1, dash="dash"), row=pred_row, col=1)
 
     height = 350 * n_rows
     fig.update_layout(height=height, template="plotly_white", margin=dict(t=50, b=40, l=50, r=20))
@@ -224,8 +284,19 @@ def make_multi_comparison_figure(
     for run in runs:
         ps = run.get("pred_states")
         pc = run.get("pred_cps", [])
-        if ps is not None:
+        run_task = run.get("task", "change_point_detection")
+        is_sd = (run_task == "state_detection")
+
+        if ps is not None and is_sd:
+            # State Detection run: use full state colors
             run_fig = make_annotation_figure(signal, pc, ps, "", color_map)
+            for trace in run_fig.data:
+                fig.add_trace(trace, row=row, col=1)
+            for shape in run_fig.layout.shapes or []:
+                fig.add_shape(shape, row=row, col=1)
+        elif pc:
+            # CPD run: neutral alternating grays
+            run_fig = _make_cpd_prediction_figure(signal, pc)
             for trace in run_fig.data:
                 fig.add_trace(trace, row=row, col=1)
             for shape in run_fig.layout.shapes or []:
@@ -238,8 +309,6 @@ def make_multi_comparison_figure(
                     mode="lines",
                     showlegend=False,
                 ), row=row, col=1)
-            for cp in (pc or []):
-                fig.add_vline(x=cp, line=dict(color="#333333", width=1, dash="dash"), row=row, col=1)
         row += 1
 
     fig.update_layout(

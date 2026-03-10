@@ -5,12 +5,12 @@ from __future__ import annotations
 import io
 import math
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
-ComplexityLevel = Literal["simple", "medium", "complex"]
+PatternType = Literal["constant", "sinusoidal", "step", "stairs", "linear", "mixed"]
 
 MAX_UPLOAD_POINTS = 200_000  # safety limit for HF Spaces
 
@@ -102,15 +102,127 @@ def _complex_segment(start, stop, n_dims, trend, curvature, freq, noise_level, r
     return out
 
 
+# -- Pattern-based segment generators --
+
+def _gen_constant(length: int, n_dims: int, level: float, noise_level: float, rng) -> np.ndarray:
+    """Flat segment at a given level."""
+    noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+    return np.full((length, n_dims), level) + noise
+
+
+def _gen_sinusoidal(length: int, n_dims: int, amplitude: float, freq: float,
+                    phase: float, offset: float, noise_level: float, rng) -> np.ndarray:
+    """Sinusoidal segment."""
+    t = np.linspace(0, 1, length, endpoint=False)
+    base = amplitude * np.sin(2 * math.pi * (freq * t + phase)) + offset
+    noise = rng.normal(scale=max(0.05 * amplitude * noise_level, 1e-12), size=(length, n_dims))
+    return np.tile(base[:, None], (1, n_dims)) + noise
+
+
+def _gen_step(length: int, n_dims: int, levels: Sequence[float],
+              noise_level: float, rng) -> np.ndarray:
+    """Piecewise-constant (step function) within a single segment."""
+    n_steps = len(levels)
+    step_len = length // n_steps
+    out = np.empty((length, n_dims))
+    for i, lvl in enumerate(levels):
+        start = i * step_len
+        stop = (i + 1) * step_len if i < n_steps - 1 else length
+        out[start:stop] = lvl
+    noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+    return out + noise
+
+
+def _gen_stairs(length: int, n_dims: int, start_level: float, step_size: float,
+                n_stairs: int, noise_level: float, rng) -> np.ndarray:
+    """Staircase pattern — monotonically increasing within the segment."""
+    stair_len = length // max(n_stairs, 1)
+    out = np.empty((length, n_dims))
+    for i in range(n_stairs):
+        s = i * stair_len
+        e = (i + 1) * stair_len if i < n_stairs - 1 else length
+        out[s:e] = start_level + i * step_size
+    noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+    return out + noise
+
+
+def _gen_linear(length: int, n_dims: int, start_val: float, end_val: float,
+                noise_level: float, rng) -> np.ndarray:
+    """Linear trend."""
+    t = np.linspace(start_val, end_val, length)
+    noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+    return np.tile(t[:, None], (1, n_dims)) + noise
+
+
+_PATTERN_GENERATORS = {
+    "constant": "constant",
+    "sinusoidal": "sinusoidal",
+    "step": "step",
+    "stairs": "stairs",
+    "linear": "linear",
+}
+
+
+def _generate_segment_by_pattern(
+    pattern: str,
+    state_idx: int,
+    length: int,
+    n_dims: int,
+    noise_level: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Generate one segment according to the chosen pattern type."""
+    if pattern == "constant":
+        level = rng.uniform(-2, 2)
+        return _gen_constant(length, n_dims, level, noise_level, rng)
+    elif pattern == "sinusoidal":
+        amp = rng.uniform(0.5, 2.0)
+        freq = rng.uniform(1.0, 4.0)
+        phase = rng.uniform(0, 1)
+        offset = rng.uniform(-1, 1)
+        return _gen_sinusoidal(length, n_dims, amp, freq, phase, offset, noise_level, rng)
+    elif pattern == "step":
+        n_steps = rng.integers(2, 5)
+        levels = rng.uniform(-2, 2, size=n_steps).tolist()
+        return _gen_step(length, n_dims, levels, noise_level, rng)
+    elif pattern == "stairs":
+        start = rng.uniform(-2, 1)
+        step_size = rng.uniform(0.3, 1.0) * rng.choice([-1, 1])
+        n_stairs = rng.integers(3, 7)
+        return _gen_stairs(length, n_dims, start, step_size, n_stairs, noise_level, rng)
+    elif pattern == "linear":
+        s = rng.uniform(-2, 2)
+        e = rng.uniform(-2, 2)
+        return _gen_linear(length, n_dims, s, e, noise_level, rng)
+    elif pattern == "mixed":
+        # Pick a random pattern (excluding mixed itself)
+        choice = rng.choice(["constant", "sinusoidal", "step", "stairs", "linear"])
+        return _generate_segment_by_pattern(choice, state_idx, length, n_dims, noise_level, rng)
+    else:
+        # Fallback to constant
+        return _gen_constant(length, n_dims, float(state_idx), noise_level, rng)
+
+
 def generate_synthetic_series(
     length: int = 1000,
     n_segments: int = 3,
-    n_dims: int = 1,
-    complexity: ComplexityLevel = "medium",
+    n_dims: int = 2,
+    pattern: PatternType = "sinusoidal",
     noise_level: float = 0.5,
+    recurring_states: bool = False,
     random_state: int | None = None,
 ) -> TimeSeriesData:
-    """Generate a synthetic multivariate time series with labelled segments."""
+    """Generate a synthetic multivariate time series with labelled segments.
+
+    Parameters
+    ----------
+    pattern : str
+        Intra-segment waveform: 'constant', 'sinusoidal', 'step', 'stairs',
+        'linear', or 'mixed' (random per segment).
+    recurring_states : bool
+        If True, state labels can repeat (fewer distinct states than segments).
+        Useful for testing state-detection algorithms.
+    """
     if length <= 0:
         raise ValueError("length must be positive")
     if n_dims <= 0:
@@ -120,31 +232,50 @@ def generate_synthetic_series(
 
     rng = np.random.default_rng(random_state)
     change_points = _generate_boundaries(length=length, n_segments=n_segments, rng=rng)
-    states = np.zeros(length, dtype=int)
-    signal = np.zeros((length, n_dims), dtype=float)
     boundaries = [0, *change_points, length]
 
-    for idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
-        if complexity == "simple":
-            level = np.full((n_dims,), float(idx))
-            level += rng.normal(scale=max(0.2 * noise_level, 1e-12), size=(n_dims,))
-            noise = rng.normal(scale=max((0.05 + 0.05 * idx) * noise_level, 1e-12), size=(stop - start, n_dims))
-            segment = level + noise
-        elif complexity == "medium":
-            amplitude = 1.0 + 0.5 * idx
-            segment = _sine_segment(start, stop, n_dims, idx * 0.5, amplitude, 1 + 0.5 * idx, rng.uniform(0, 1), noise_level, rng)
-        elif complexity == "complex":
-            segment = _complex_segment(start, stop, n_dims, rng.normal(loc=0.5 * idx, scale=0.2), rng.uniform(-1.0, 1.0), rng.uniform(1.0, 3.0), noise_level, rng)
-        else:
-            raise ValueError(f"Unknown complexity level: {complexity}")
-        signal[start:stop] = segment
-        states[start:stop] = idx
+    # Assign state labels
+    if recurring_states and n_segments >= 3:
+        # Use fewer distinct states than segments (at least 2)
+        n_distinct = max(2, n_segments // 2)
+        state_ids: list[int] = []
+        for i in range(n_segments):
+            # Avoid same state as previous
+            candidates = list(range(n_distinct))
+            if state_ids:
+                candidates = [c for c in candidates if c != state_ids[-1]]
+            state_ids.append(int(rng.choice(candidates)))
+    else:
+        state_ids = list(range(n_segments))
 
+    states = np.zeros(length, dtype=int)
+    signal = np.zeros((length, n_dims), dtype=float)
+
+    # Pre-generate a signature per distinct state so recurring states look alike
+    distinct_states = sorted(set(state_ids))
+    state_seeds: dict[int, int] = {s: int(rng.integers(0, 2**31)) for s in distinct_states}
+
+    for seg_idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
+        sid = state_ids[seg_idx]
+        seg_len = stop - start
+
+        # Use a sub-RNG seeded from the state id so recurring states share
+        # the same waveform "style" (but not identical due to noise)
+        if recurring_states:
+            seg_rng = np.random.default_rng(state_seeds[sid] + seg_idx)
+        else:
+            seg_rng = rng
+
+        segment = _generate_segment_by_pattern(pattern, sid, seg_len, n_dims, noise_level, seg_rng)
+        signal[start:stop] = segment
+        states[start:stop] = sid
+
+    recur_label = ", recurring" if recurring_states else ""
     return TimeSeriesData(
         signal=signal,
         ground_truth=states,
         change_points=change_points,
-        name=f"Synthetic ({complexity}, {n_segments} segments, {n_dims}D)",
+        name=f"Synthetic ({pattern}{recur_label}, {n_segments} seg, {n_dims}D)",
     )
 
 
