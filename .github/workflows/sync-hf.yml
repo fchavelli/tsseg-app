@@ -19,6 +19,10 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://huggingface.co/spaces/fchavelli/tsseg || true
-          git remote set-url hf https://huggingface.co/spaces/fchavelli/tsseg
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_TOKEN is missing. Set repository secret HF_TOKEN with write access to the Space."
+            exit 1
+          fi
+          git remote add hf https://fchavelli:${HF_TOKEN}@huggingface.co/spaces/fchavelli/tsseg || true
+          git remote set-url hf https://fchavelli:${HF_TOKEN}@huggingface.co/spaces/fchavelli/tsseg
           git push hf main --force
