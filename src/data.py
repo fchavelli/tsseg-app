@@ -374,11 +374,35 @@ def load_csv(
         df = df.drop(columns=[label_column])
     elif label_column and label_column not in df.columns:
         # Try auto-detect common names
-        for candidate in ["label", "labels", "ground_truth", "gt", "state", "states", "class", "segment"]:
+        for candidate in [
+            "label", "labels", "ground_truth", "gt",
+            "state", "states", "class", "segment",
+            "is_anomaly", "anomaly", "target", "y",
+        ]:
             if candidate in df.columns:
                 ground_truth = df[candidate].values.astype(int)
                 df = df.drop(columns=[candidate])
                 break
+    else:
+        # No label_column specified — still try auto-detect
+        for candidate in [
+            "label", "labels", "ground_truth", "gt",
+            "state", "states", "class", "segment",
+            "is_anomaly", "anomaly", "target", "y",
+        ]:
+            if candidate in df.columns:
+                ground_truth = df[candidate].values.astype(int)
+                df = df.drop(columns=[candidate])
+                break
+
+    # Drop common index / timestamp columns that are not signal data
+    _INDEX_COLS = {
+        "timestamp", "timestamps", "time", "date", "datetime",
+        "index", "idx", "id", "row", "step",
+    }
+    cols_to_drop = [c for c in df.columns if str(c).lower().strip() in _INDEX_COLS]
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop)
 
     # Drop non-numeric columns
     numeric_df = df.select_dtypes(include=[np.number])

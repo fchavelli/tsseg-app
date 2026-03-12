@@ -21,9 +21,9 @@ _CPD_GRAYS = ["#555555", "#aaaaaa"]
 def _adjust_color_hex(hex_color: str, factor: float) -> str:
     hex_color = hex_color.lstrip("#")
     r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-    r = int(r + (255 - r) * factor)
-    g = int(g + (255 - g) * factor)
-    b = int(b + (255 - b) * factor)
+    r = min(255, max(0, int(r + (255 - r) * factor)))
+    g = min(255, max(0, int(g + (255 - g) * factor)))
+    b = min(255, max(0, int(b + (255 - b) * factor)))
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
@@ -31,7 +31,9 @@ def build_segment_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
     colors = []
     for idx in range(n_segments):
         base = _BASE_COLORS[idx % len(_BASE_COLORS)]
-        segment_colors = [_adjust_color_hex(base, 0.15 * dim) for dim in range(n_dims)]
+        segment_colors = [
+            _adjust_color_hex(base, min(0.15 * dim, 0.85)) for dim in range(n_dims)
+        ]
         colors.append(segment_colors)
     return colors
 
@@ -45,7 +47,9 @@ def build_cpd_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
     colors = []
     for idx in range(n_segments):
         base = _CPD_GRAYS[idx % len(_CPD_GRAYS)]
-        segment_colors = [_adjust_color_hex(base, 0.10 * dim) for dim in range(n_dims)]
+        segment_colors = [
+            _adjust_color_hex(base, min(0.10 * dim, 0.85)) for dim in range(n_dims)
+        ]
         colors.append(segment_colors)
     return colors
 
