@@ -78,8 +78,20 @@ def _generate_boundaries(
         min_segment_length = max(1, length // n_segments)
     proportions = rng.dirichlet(alpha=np.ones(n_segments))
     segment_lengths = np.maximum(min_segment_length, (proportions * length).astype(int))
+    # Redistribute excess/deficit so that no segment becomes negative
     delta = length - int(segment_lengths.sum())
-    segment_lengths[0] += delta
+    if delta > 0:
+        # Distribute extra samples round-robin
+        for i in range(delta):
+            segment_lengths[i % n_segments] += 1
+    elif delta < 0:
+        # Remove excess samples from the largest segments first
+        for _ in range(-delta):
+            idx = int(np.argmax(segment_lengths))
+            if segment_lengths[idx] <= min_segment_length:
+                # All segments are at minimum; shrink the largest anyway
+                idx = int(np.argmax(segment_lengths))
+            segment_lengths[idx] -= 1
     boundaries: list[int] = []
     cursor = 0
     for seg_len in segment_lengths[:-1]:

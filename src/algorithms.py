@@ -115,6 +115,13 @@ _EXCLUDED_DETECTORS: set[str] = {
 }
 
 
+def _strip_detector_suffix(name: str) -> str:
+    """Remove trailing 'Detector' from a class name for cleaner display."""
+    if name.endswith("Detector"):
+        return name[: -len("Detector")]
+    return name
+
+
 def _iter_exported_detectors_from_package() -> Iterable[Tuple[str, type]]:
     """Iterate detectors through ``tsseg.algorithms.__all__``.
 
@@ -223,14 +230,15 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
             continue
         tags = getattr(cls, "_tags", {}) or {}
         detector_type = tags.get("detector_type", "unknown")
+        short_name = _strip_detector_suffix(name)
         info = DetectorInfo(
-            name=name,
+            name=short_name,
             cls=cls,
             detector_type=detector_type,
             tags=tags,
             category=_infer_category(name),
         )
-        results[name] = info
+        results[short_name] = info
     return results
 
 

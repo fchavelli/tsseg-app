@@ -12,6 +12,7 @@ from tsseg.metrics import (
     BidirectionalCovering,
     Covering,
     F1Score,
+    GaussianF1Score,
     NormalizedMutualInformation,
     StateMatchingScore,
     WeightedAdjustedRandIndex,
@@ -40,6 +41,11 @@ CPD_METRICS = {
         "class": BidirectionalCovering,
         "default_params": {"aggregation": "harmonic", "convert_labels_to_segments": True},
         "description": "Bidirectional covering (truth→pred + pred→truth)",
+    },
+    "Gaussian F1": {
+        "class": GaussianF1Score,
+        "default_params": {"sigma_fraction": 0.01, "convert_labels_to_segments": True},
+        "description": "Gaussian-weighted F1 with soft matching (no hard margin)",
     },
 }
 
