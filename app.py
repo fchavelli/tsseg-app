@@ -917,64 +917,18 @@ def create_app() -> gr.Blocks:
             # TAB 5 — ABOUT
             # ==================================================================
             with gr.Tab("About", id="tab_about"):
-                # -- Build algorithm rows with license info --
-                _ALGO_LICENSES = {
-                    "Pelt": ("BSD-2", "ruptures"),
-                    "BinSeg": ("BSD-2", "ruptures"),
-                    "BottomUp": ("BSD-2", "ruptures"),
-                    "DynP": ("BSD-2", "ruptures"),
-                    "Window": ("BSD-2", "ruptures"),
-                    "KCPD": ("BSD-2", "ruptures"),
-                    "AMOC": ("BSD-2", "ruptures"),
-                    "BOCD": ("Apache-2.0", "hildensia"),
-                    "EAgglo": ("BSD-3", "aeon"),
-                    "IGTS": ("BSD-3", "aeon"),
-                    "Hidalgo": ("BSD-3", "aeon"),
-                    "HdpHsmm": ("BSD-3", "aeon"),
-                    "CLaSP": ("BSD-3", "claspy"),
-                    "CLaP": ("BSD-3", "claspy"),
-                    "FLUSS": ("BSD-3", "aeon"),
-                    "GreedyGaussian": ("BSD-2", "GGS"),
-                    "ICID": ("GPLv3", "IsolationKernel"),
-                    "TICC": ("BSD-2", "TICC"),
-                    "Time2State": ("MIT", "Lab-ANT"),
-                    "Prophet": ("MIT", "Facebook"),
-                    "TGLAD": ("Non-Commercial", "Harshs27"),
-                    "TiRE": ("—", "KU Leuven"),
-                    "E2USD": ("—", "AI4CTS"),
-                    "ESPRESSO": ("—", "cruiseresearchgroup"),
-                    "TSCP2": ("—", "cruiseresearchgroup"),
-                    "InformationGain": ("BSD-3", "aeon"),
-                }
+                from src.about_data import (
+                    build_algo_table,
+                    build_dataset_table,
+                    build_metric_table,
+                    DISCLAIMER_MD,
+                    LINKS_MD,
+                    MOCAP_NOTE_MD,
+                )
 
-                # CPD subfamilies from the paper figure
-                _CPD_DISTRIBUTION = {"AMOC", "BinSeg", "Window", "BottomUp", "BOCD", "Pelt", "KCPD", "DynP", "EAgglo", "Prophet", "ICID"}
-                _CPD_SUBSEQUENCE = {"IGTS", "FLUSS", "TSCP2", "ESPRESSO", "TiRE", "TGLAD", "CLaSP", "InformationGain"}
-                _SD_INTEGRATED = {"AutoPlait", "HdpHsmm", "Hidalgo", "GreedyGaussian"}
-                _SD_DECOMPOSED = {"TICC", "Time2State", "E2USD", "CLaP"}
-
-                def _algo_subfamily(name):
-                    if name in _CPD_DISTRIBUTION:
-                        return "Distribution-based"
-                    elif name in _CPD_SUBSEQUENCE:
-                        return "Subsequence-based"
-                    elif name in _SD_INTEGRATED:
-                        return "Integrated"
-                    elif name in _SD_DECOMPOSED:
-                        return "Decomposed"
-                    return "—"
-
-                detector_rows = []
-                for name, info in sorted(all_detectors.items()):
-                    task = "CPD" if info.detector_type == "change_point_detection" else "SD"
-                    subfamily = _algo_subfamily(name)
-                    license_info, source = _ALGO_LICENSES.get(name, ("AGPLv3", "tsseg"))
-                    avail = "✓" if info.is_available else "✗"
-                    detector_rows.append(
-                        f"| {name} | {task} | {subfamily} | {info.category} | {license_info} | {source} | {avail} |"
-                    )
-
-                detectors_table = "\n".join(detector_rows)
+                algo_table = build_algo_table()
+                metric_table = build_metric_table()
+                dataset_table = build_dataset_table()
 
                 gr.Markdown(f"""
 #### About tsseg-app
@@ -989,64 +943,29 @@ can be inferred from detected states.
 
 #### Algorithms
 
-| Algorithm | Task | Family | Category | License | Source | Available |
-|-----------|------|--------|----------|---------|--------|-----------|
-{detectors_table}
+{algo_table}
 
-> **⚠️ Disclaimer :** Some algorithms were adapted from research paper artifacts
-> published without an explicit license (marked "—" above). These are provided
-> for **research and educational purposes only**. If you are the author of one of
-> these works and wish to specify licensing terms, please
-> [open an issue](https://github.com/fchavelli/tsseg/issues).
+{DISCLAIMER_MD}
 
 ---
 
 #### Metrics
 
-##### Change Point Detection
-
-| Metric | Description |
-|--------|-------------|
-| F1 Score | Classic precision / recall / F1 with a hard margin tolerance around each true change point |
-| Gaussian F1 | Gaussian-weighted soft F1 — predictions are rewarded via a Gaussian kernel that decays with distance, no hard margin |
-| Covering | Segment-wise Intersection over Union (IoU) weighted by segment duration |
-| Bidirectional Covering | Evaluates coverage in both directions (truth→pred and pred→truth) aggregated by harmonic mean |
-| Hausdorff Distance | Maximum over all true CPs of the distance to the nearest predicted CP (and vice-versa) |
-
-##### State Detection
-
-| Metric | Description |
-|--------|-------------|
-| Adjusted Rand Index (ARI) | Chance-adjusted agreement between true and predicted label partitions (sklearn) |
-| Normalized Mutual Information (NMI) | Information-theoretic agreement normalised to [0, 1] (sklearn) |
-| Adjusted Mutual Information (AMI) | Chance-adjusted variant of NMI (sklearn) |
-| Weighted ARI | ARI variant that gives more weight to samples near segment boundaries |
-| Weighted NMI | NMI variant that gives more weight to samples near segment boundaries |
-| State Matching Score (SMS) | Hungarian matching of predicted to true states with fine-grained error classification |
+{metric_table}
 
 ---
 
 #### Datasets
 
-| Dataset | Type | Description | Dimensions | Segments | Source |
-|---------|------|-------------|------------|----------|--------|
-| Synthetic | Generated | Configurable generator with 6 intra-segment patterns (constant, sinusoidal, step, stairs, linear, mixed), noise control, recurring states | 1–8 | 2–12 | tsseg |
-| CMU MoCap 86 | Real-world | Motion capture from CMU subject 86 — humeral & femoral angles, 9 labelled trials | 4 | 3–8 | [CMU MoCap](https://mocap.cs.cmu.edu/) |
+{dataset_table}
 
-> The MoCap subset uses data from the **CMU Graphics Lab Motion Capture Database**
-> (NSF EIA-0196217). Labels were sourced from Time2State (Wang et al., 2023).
-> Only the first rotation axis of left/right humerus and femur is kept, following
-> the protocol of AutoPlait (Matsubara et al., 2014).
+{MOCAP_NOTE_MD}
 
 ---
 
 #### Links
 
-- [tsseg Documentation](https://fchavelli.github.io/tsseg/)
-- [GitHub Repository](https://github.com/fchavelli/tsseg)
-- [License: AGPLv3](https://github.com/fchavelli/tsseg/blob/main/LICENSE)
-
-Built with [Gradio](https://gradio.app) · Powered by [tsseg](https://github.com/fchavelli/tsseg)
+{LINKS_MD}
                 """)
 
     return app
