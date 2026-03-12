@@ -38,3 +38,6 @@ htmlcov/
 
 # Paper
 paper/
+
+# Data
+data/

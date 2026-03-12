@@ -12,12 +12,16 @@ from tsseg.metrics import (
     BidirectionalCovering,
     Covering,
     F1Score,
-    GaussianF1Score,
     NormalizedMutualInformation,
     StateMatchingScore,
     WeightedAdjustedRandIndex,
     WeightedNormalizedMutualInformation,
 )
+
+try:
+    from tsseg.metrics import GaussianF1Score  # may not be in installed tsseg yet
+except ImportError:
+    GaussianF1Score = None
 
 # -- Registry of metrics by task type --
 
@@ -42,12 +46,14 @@ CPD_METRICS = {
         "default_params": {"aggregation": "harmonic", "convert_labels_to_segments": True},
         "description": "Bidirectional covering (truth→pred + pred→truth)",
     },
-    "Gaussian F1": {
+}
+
+if GaussianF1Score is not None:
+    CPD_METRICS["Gaussian F1"] = {
         "class": GaussianF1Score,
         "default_params": {"sigma_fraction": 0.01, "convert_labels_to_segments": True},
         "description": "Gaussian-weighted F1 with soft matching (no hard margin)",
-    },
-}
+    }
 
 STATE_METRICS = {
     "Adjusted Rand Index": {
