@@ -63,13 +63,13 @@ class DetectorInfo:
 
 # -- Detector category heuristics based on module path / name --
 _CATEGORY_MAP = {
-    "pelt": "Ruptures (offline)",
-    "binseg": "Ruptures (offline)",
-    "bottomup": "Ruptures (offline)",
-    "dynp": "Ruptures (offline)",
-    "window": "Ruptures (offline)",
-    "kcpd": "Ruptures (offline)",
-    "amoc": "Ruptures (offline)",
+    "pelt": "Statistical",
+    "binseg": "Statistical",
+    "bottomup": "Statistical",
+    "dynp": "Statistical",
+    "window": "Statistical",
+    "kcpd": "Statistical",
+    "amoc": "Statistical",
     "bocd": "Bayesian",
     "hdp_hsmm": "Bayesian",
     "hidalgo": "Bayesian",
@@ -108,8 +108,8 @@ def _infer_category(name: str) -> str:
 # Detectors excluded from the app (broken dependencies, unavailable on HF, etc.)
 _EXCLUDED_DETECTORS: set[str] = {
     "PatssDetector",   # pattern mining – missing deps
-    "VQTSSDetector",   # deep learning – missing deps
-    "VSAXDetector",    # symbolic – broken on HF
+    # "VQTSSDetector",   # deep learning – missing deps
+    # "VSAXDetector",    # symbolic – broken on HF
     "AutoPlaitDetector",  # requires C binary not available on HF
     "TSCP2Detector",   # requires tensorflow not shipped on HF
 }
