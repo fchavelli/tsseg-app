@@ -108,7 +108,7 @@ def _infer_category(name: str) -> str:
 # Detectors excluded from the app (broken dependencies, unavailable on HF, etc.)
 _EXCLUDED_DETECTORS: set[str] = {
     "PatssDetector",   # pattern mining – missing deps
-    # "VQTSSDetector",   # deep learning – missing deps
+    "VQTSSDetector",   # deep learning – missing deps
     # "VSAXDetector",    # symbolic – broken on HF
     "AutoPlaitDetector",  # requires C binary not available on HF
     "TSCP2Detector",   # requires tensorflow not shipped on HF
