@@ -914,7 +914,15 @@ def create_app() -> gr.Blocks:
                 )
 
             # ==================================================================
-            # TAB 5 — ABOUT
+            # TAB 5 — TUTORIAL
+            # ==================================================================
+            with gr.Tab("Tutorial", id="tab_tutorial"):
+                gr.Markdown("#### App Tutorial")
+                gr.Markdown("Check out this quick video walkthrough of the app features and usage tips!")
+                gr.Video(value="assets/tutorial.mp4", label="tsseg Tutorial", autoplay=False, loop=False)
+
+            # ==================================================================
+            # TAB 6 — ABOUT
             # ==================================================================
             with gr.Tab("About", id="tab_about"):
                 from src.about_data import (

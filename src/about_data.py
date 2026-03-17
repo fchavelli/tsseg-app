@@ -44,7 +44,6 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("CLaSP",            "CPD", "Subsequence-based",  "BSD-3",         "claspy",               "stable"),
     AlgoEntry("ESPRESSO",         "CPD", "Subsequence-based",  "—",             "cruiseresearchgroup",  "stable"),
     AlgoEntry("FLUSS",            "CPD", "Subsequence-based",  "BSD-3",         "aeon",                 "stable"),
-    AlgoEntry("InformationGain",  "CPD", "Subsequence-based",  "BSD-3",         "aeon",                 "stable"),
     AlgoEntry("IGTS",             "CPD", "Subsequence-based",  "BSD-3",         "aeon",                 "stable"),
     AlgoEntry("TGLAD",            "CPD", "Subsequence-based",  "Non-Commercial","Harshs27",             "stable"),
     AlgoEntry("TiRE",             "CPD", "Subsequence-based",  "—",             "KU Leuven",            "stable"),
