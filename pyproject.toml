@@ -14,7 +14,7 @@ authors = [
 ]
 
 dependencies = [
-    "tsseg[torch,prophet,accelerators,docs,aeon] @ git+https://github.com/fchavelli/tsseg.git",
+    "tsseg[torch,prophet,aeon] @ git+https://github.com/fchavelli/tsseg.git",
     "gradio>=6,<7",
     "plotly>=5.18",
     "numpy>=1.24",

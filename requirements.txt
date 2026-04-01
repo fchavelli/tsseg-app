@@ -1,5 +1,9 @@
+# CPU-only PyTorch (much smaller than full CUDA build)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # Core – install tsseg with selected extras for HF Space
-tsseg[torch,prophet,accelerators,docs,aeon] @ git+https://github.com/fchavelli/tsseg.git
+# Removed 'docs' (sphinx – not needed at runtime) and 'accelerators' (numba – not needed for demo)
+tsseg[torch,prophet,aeon] @ git+https://github.com/fchavelli/tsseg.git
 
 # Web framework
 gradio>=6,<7

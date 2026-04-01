@@ -189,6 +189,8 @@ def create_app() -> gr.Blocks:
 
     with gr.Blocks(
         title="tsseg — Time Series Segmentation",
+        css=APP_CSS,
+        theme=APP_THEME,
     ) as app:
         # -- Shared state --
         data_state = gr.State(value=None)          # TimeSeriesData
@@ -983,14 +985,13 @@ can be inferred from detected states.
 # Entry point
 # ============================================================================
 
+# Module-level app for HF Spaces hot reload compatibility
+app = create_app()
+
 if __name__ == "__main__":
-    app = create_app()
     app.launch(
         server_name="0.0.0.0",
         server_port=7860,
         share=False,
         show_error=True,
-        ssr_mode=False,
-        css=APP_CSS,
-        theme=APP_THEME,
     )
