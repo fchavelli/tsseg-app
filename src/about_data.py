@@ -48,9 +48,9 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("TGLAD",            "CPD", "Subsequence-based",  "Non-Commercial","Harshs27",             "stable"),
     AlgoEntry("TiRE",             "CPD", "Subsequence-based",  "—",             "KU Leuven",            "stable"),
     AlgoEntry("TSCP2",            "CPD", "Subsequence-based",  "—",             "cruiseresearchgroup",  "stable"),
-    # ── SD · Integrated ───────────────────────────────────────────────────
+    AlgoEntry("GreedyGaussian",   "CPD", "Distribution-based", "BSD-3",         "aeon",                 "stable"),
+    # ── SD · Integrated ───────────────────────────────────────────────
     AlgoEntry("AutoPlait",        "SD",  "Integrated",         "—",             "—",                    "experimental"),
-    AlgoEntry("GreedyGaussian",   "SD",  "Integrated",         "BSD-3",         "aeon",                 "stable"),
     AlgoEntry("HdpHsmm",          "SD",  "Integrated",         "—",             "zhd96",                "stable"),
     AlgoEntry("Hidalgo",          "SD",  "Integrated",         "BSD-3",         "aeon",                 "stable"),
     # ── SD · Decomposed ──────────────────────────────────────────────────
