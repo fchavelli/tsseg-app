@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import inspect
 import importlib
 import importlib.util
+import inspect
 import logging
 import re
 from dataclasses import dataclass, field
@@ -31,6 +31,8 @@ class DetectorInfo:
     tags: dict[str, Any] = field(default_factory=dict)
     description: str = ""
     category: str = ""
+    complexity: str = ""  # Big-O complexity string (math, no $)
+    complexity_tier: str = ""  # linear / log_linear / quadratic / cubic
 
     @property
     def dependencies(self) -> list[str]:
@@ -62,43 +64,34 @@ class DetectorInfo:
 
 
 # -- Detector category heuristics based on module path / name --
+# Fallback used only when the algorithm isn't found in about_data.ALGO_BY_NAME.
 _CATEGORY_MAP = {
-    "pelt": "Statistical",
-    "binseg": "Statistical",
-    "bottomup": "Statistical",
-    "dynp": "Statistical",
-    "window": "Statistical",
-    "kcpd": "Statistical",
-    "amoc": "Statistical",
-    "bocd": "Bayesian",
-    "hdp_hsmm": "Bayesian",
-    "hidalgo": "Bayesian",
-    "clasp": "Matrix Profile",
-    "clap": "Matrix Profile",
-    "fluss": "Matrix Profile",
-    "espresso": "Matrix Profile",
-    "ggs": "Statistical",
-    "eagglo": "Statistical",
-    "igts": "Statistical",
-    "icid": "Kernel / Isolation",
-    "vsax": "Symbolic",
-    "ticc": "Graphical Model",
-    "tglad": "Deep Learning",
-    "tire": "Deep Learning",
-    "e2usd": "Deep Learning",
-    "time2state": "Deep Learning",
-    "tscp2": "Deep Learning",
-    "vqtss": "Deep Learning",
-    "prophet": "Forecasting",
-    "autoplait": "Regime (HMM)",
-    "patss": "Pattern Mining",
+    "vsax": "Subsequence-based",
+    "changefinder": "Distribution-based",
+    "snlds": "Decomposed",
+    "patss": "Subsequence-based",
+    "vqtss": "Decomposed",
     "random": "Baseline",
 }
 
 
 def _infer_category(name: str) -> str:
-    """Infer algorithm category from the class name."""
-    name_lower = name.lower().replace("detector", "")
+    """Infer algorithm family.
+
+    Primary source is ``src.about_data.ALGO_BY_NAME`` (curated families).
+    Falls back to ``_CATEGORY_MAP`` for detectors not listed there.
+    """
+    short = _strip_detector_suffix(name)
+    # Local import to avoid a circular dependency at module load time.
+    try:
+        from .about_data import get_algo_entry
+
+        entry = get_algo_entry(short)
+        if entry is not None:
+            return entry.family
+    except Exception:
+        pass
+    name_lower = short.lower()
     for key, cat in _CATEGORY_MAP.items():
         if key in name_lower:
             return cat
@@ -107,11 +100,13 @@ def _infer_category(name: str) -> str:
 
 # Detectors excluded from the app (broken dependencies, unavailable on HF, etc.)
 _EXCLUDED_DETECTORS: set[str] = {
-    "PatssDetector",   # pattern mining – missing deps
-    "VQTSSDetector",   # deep learning – missing deps
+    "PatssDetector",  # pattern mining – missing deps
+    "VQTSSDetector",  # deep learning – missing deps
     # "VSAXDetector",    # symbolic – broken on HF
-    "AutoPlaitDetector",  # requires C binary not available on HF
-    "TSCP2Detector",   # requires tensorflow not shipped on HF
+    "AutoPlaitDetector",  # requires C binary not available on HF (TODO bundle)
+    "TSCP2Detector",  # requires tensorflow not shipped on HF
+    "SNLDSDetector",  # tensorflow + experimental
+    "ChangeFinderDetector",  # not in curated algo list
 }
 
 
@@ -223,6 +218,8 @@ def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
 
 def get_all_detectors() -> Dict[str, DetectorInfo]:
     """Return all detectors with metadata (excluding broken/unavailable ones)."""
+    from .about_data import classify_complexity, get_algo_entry
+
     results: Dict[str, DetectorInfo] = {}
     for name, cls in _iter_exported_detectors():
         if name in _EXCLUDED_DETECTORS:
@@ -231,12 +228,16 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
         tags = getattr(cls, "_tags", {}) or {}
         detector_type = tags.get("detector_type", "unknown")
         short_name = _strip_detector_suffix(name)
+        entry = get_algo_entry(short_name)
+        complexity = entry.complexity if entry else ""
         info = DetectorInfo(
             name=short_name,
             cls=cls,
             detector_type=detector_type,
             tags=tags,
             category=_infer_category(name),
+            complexity=complexity,
+            complexity_tier=classify_complexity(complexity) if complexity else "",
         )
         results[short_name] = info
     return results
@@ -244,11 +245,7 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
 
 def get_detectors_by_type(detector_type: DetectorType) -> Dict[str, DetectorInfo]:
     """Return detectors filtered by detector_type tag."""
-    return {
-        name: info
-        for name, info in get_all_detectors().items()
-        if info.detector_type == detector_type
-    }
+    return {name: info for name, info in get_all_detectors().items() if info.detector_type == detector_type}
 
 
 def get_constructor_signature(cls: type) -> inspect.Signature:
@@ -257,8 +254,7 @@ def get_constructor_signature(cls: type) -> inspect.Signature:
     params = [
         param
         for param in sig.parameters.values()
-        if param.name != "self"
-        and param.kind not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+        if param.name != "self" and param.kind not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
     ]
     return inspect.Signature(params)
 

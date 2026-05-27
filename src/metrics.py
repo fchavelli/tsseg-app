@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional
 
 import numpy as np
-
 from tsseg.metrics import (
     AdjustedMutualInformation,
     AdjustedRandIndex,

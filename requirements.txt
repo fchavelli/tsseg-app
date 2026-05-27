@@ -21,3 +21,7 @@ pyyaml>=6.0
 
 # Matrix profile (FLUSS detector)
 stumpy>=1.12
+
+# BEAST (BeastDetector) — Bayesian change-point detector (C extension)
+# Requires numpy<2 at runtime; pin if needed by environment.
+Rbeast>=0.1.20

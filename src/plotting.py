@@ -9,9 +9,21 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 _BASE_COLORS = [
-    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-    "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+    "#aec7e8",
+    "#ffbb78",
+    "#98df8a",
+    "#ff9896",
+    "#c5b0d5",
 ]
 
 # Neutral alternating grays for CPD predictions (no state semantics)
@@ -20,7 +32,7 @@ _CPD_GRAYS = ["#555555", "#aaaaaa"]
 
 def _adjust_color_hex(hex_color: str, factor: float) -> str:
     hex_color = hex_color.lstrip("#")
-    r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
     r = min(255, max(0, int(r + (255 - r) * factor)))
     g = min(255, max(0, int(g + (255 - g) * factor)))
     b = min(255, max(0, int(b + (255 - b) * factor)))
@@ -31,9 +43,7 @@ def build_segment_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
     colors = []
     for idx in range(n_segments):
         base = _BASE_COLORS[idx % len(_BASE_COLORS)]
-        segment_colors = [
-            _adjust_color_hex(base, min(0.15 * dim, 0.85)) for dim in range(n_dims)
-        ]
+        segment_colors = [_adjust_color_hex(base, min(0.15 * dim, 0.85)) for dim in range(n_dims)]
         colors.append(segment_colors)
     return colors
 
@@ -47,9 +57,7 @@ def build_cpd_color_map(n_segments: int, n_dims: int) -> list[list[str]]:
     colors = []
     for idx in range(n_segments):
         base = _CPD_GRAYS[idx % len(_CPD_GRAYS)]
-        segment_colors = [
-            _adjust_color_hex(base, min(0.10 * dim, 0.85)) for dim in range(n_dims)
-        ]
+        segment_colors = [_adjust_color_hex(base, min(0.10 * dim, 0.85)) for dim in range(n_dims)]
         colors.append(segment_colors)
     return colors
 
@@ -79,14 +87,16 @@ def make_annotation_figure(
     for start, stop, state in _iter_segments(states):
         for dim in range(n_dims):
             color = color_map[state % len(color_map)][dim % len(color_map[state % len(color_map)])]
-            fig.add_trace(go.Scatter(
-                x=np.arange(start, stop),
-                y=signal[start:stop, dim],
-                mode="lines",
-                line=dict(color=color, width=2),
-                name=f"State {state} · Dim {dim}",
-                showlegend=False,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=np.arange(start, stop),
+                    y=signal[start:stop, dim],
+                    mode="lines",
+                    line=dict(color=color, width=2),
+                    name=f"State {state} · Dim {dim}",
+                    showlegend=False,
+                )
+            )
 
     for cp in change_points:
         fig.add_vline(x=cp, line=dict(color="#333333", width=1, dash="dash"))
@@ -107,13 +117,15 @@ def make_signal_figure(signal: np.ndarray, title: str = "Signal") -> go.Figure:
     n_samples, n_dims = signal.shape
     fig = go.Figure()
     for dim in range(n_dims):
-        fig.add_trace(go.Scatter(
-            x=np.arange(n_samples),
-            y=signal[:, dim],
-            mode="lines",
-            name=f"Dim {dim}",
-            line=dict(color=_BASE_COLORS[dim % len(_BASE_COLORS)], width=1.5),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=np.arange(n_samples),
+                y=signal[:, dim],
+                mode="lines",
+                name=f"Dim {dim}",
+                line=dict(color=_BASE_COLORS[dim % len(_BASE_COLORS)], width=1.5),
+            )
+        )
     fig.update_layout(
         title=title,
         xaxis_title="Time",
@@ -143,13 +155,15 @@ def _make_cpd_prediction_figure(
     for seg_idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
         for dim in range(n_dims):
             color = cpd_cmap[seg_idx % len(cpd_cmap)][dim % len(cpd_cmap[seg_idx % len(cpd_cmap)])]
-            fig.add_trace(go.Scatter(
-                x=np.arange(start, stop),
-                y=signal[start:stop, dim],
-                mode="lines",
-                line=dict(color=color, width=2),
-                showlegend=False,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=np.arange(start, stop),
+                    y=signal[start:stop, dim],
+                    mode="lines",
+                    line=dict(color=color, width=2),
+                    showlegend=False,
+                )
+            )
     for cp in pred_cps:
         fig.add_vline(x=cp, line=dict(color="#333333", width=1, dash="dash"))
     return fig
@@ -174,10 +188,11 @@ def make_comparison_figure(
     """
     has_truth = truth_states is not None
     n_rows = 2 if has_truth else 1
-    titles = (["Ground Truth", "Prediction"] if has_truth else ["Prediction"])
+    titles = ["Ground Truth", "Prediction"] if has_truth else ["Prediction"]
 
     fig = make_subplots(
-        rows=n_rows, cols=1,
+        rows=n_rows,
+        cols=1,
         shared_xaxes=True,
         vertical_spacing=0.08,
         subplot_titles=titles,
@@ -191,7 +206,7 @@ def make_comparison_figure(
             fig.add_shape(shape, row=1, col=1)
 
     pred_row = 2 if has_truth else 1
-    is_cpd = (task == "change_point_detection")
+    is_cpd = task == "change_point_detection"
 
     if pred_states is not None and not is_cpd:
         # State Detection: use full state colors
@@ -216,13 +231,17 @@ def make_comparison_figure(
     else:
         n_dims = signal.shape[1]
         for dim in range(n_dims):
-            fig.add_trace(go.Scatter(
-                x=np.arange(signal.shape[0]),
-                y=signal[:, dim],
-                mode="lines",
-                name=f"Dim {dim}",
-                showlegend=False,
-            ), row=pred_row, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=np.arange(signal.shape[0]),
+                    y=signal[:, dim],
+                    mode="lines",
+                    name=f"Dim {dim}",
+                    showlegend=False,
+                ),
+                row=pred_row,
+                col=1,
+            )
 
     height = 350 * n_rows
     fig.update_layout(height=height, template="plotly_white", margin=dict(t=50, b=40, l=50, r=20))
@@ -270,7 +289,8 @@ def make_multi_comparison_figure(
         titles.append(run["name"])
 
     fig = make_subplots(
-        rows=n_rows, cols=1,
+        rows=n_rows,
+        cols=1,
         shared_xaxes=True,
         vertical_spacing=0.04,
         subplot_titles=titles,
@@ -289,7 +309,7 @@ def make_multi_comparison_figure(
         ps = run.get("pred_states")
         pc = run.get("pred_cps", [])
         run_task = run.get("task", "change_point_detection")
-        is_sd = (run_task == "state_detection")
+        is_sd = run_task == "state_detection"
 
         if ps is not None and is_sd:
             # State Detection run: use full state colors
@@ -307,12 +327,16 @@ def make_multi_comparison_figure(
                 fig.add_shape(shape, row=row, col=1)
         else:
             for dim in range(signal.shape[1]):
-                fig.add_trace(go.Scatter(
-                    x=np.arange(signal.shape[0]),
-                    y=signal[:, dim],
-                    mode="lines",
-                    showlegend=False,
-                ), row=row, col=1)
+                fig.add_trace(
+                    go.Scatter(
+                        x=np.arange(signal.shape[0]),
+                        y=signal[:, dim],
+                        mode="lines",
+                        showlegend=False,
+                    ),
+                    row=row,
+                    col=1,
+                )
         row += 1
 
     fig.update_layout(
@@ -334,6 +358,7 @@ def make_metrics_bar_chart(scores_df) -> go.Figure:
     - State detection metrics → purple/orange palette
     """
     import pandas as pd
+
     if not isinstance(scores_df, pd.DataFrame) or scores_df.empty:
         return go.Figure()
 
@@ -360,12 +385,14 @@ def make_metrics_bar_chart(scores_df) -> go.Figure:
 
     for i, metric in enumerate(metric_cols):
         color = _METRIC_COLORS.get(metric, _BASE_COLORS[i % len(_BASE_COLORS)])
-        fig.add_trace(go.Bar(
-            x=scores_df["Algorithm"],
-            y=scores_df[metric],
-            name=metric,
-            marker_color=color,
-        ))
+        fig.add_trace(
+            go.Bar(
+                x=scores_df["Algorithm"],
+                y=scores_df[metric],
+                name=metric,
+                marker_color=color,
+            )
+        )
 
     fig.update_layout(
         barmode="group",

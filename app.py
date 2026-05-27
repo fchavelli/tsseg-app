@@ -8,12 +8,11 @@ Launch with:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import gradio as gr
 import numpy as np
@@ -22,21 +21,17 @@ import pandas as pd
 from src.algorithms import (
     DetectorInfo,
     get_all_detectors,
-    get_constructor_signature,
     get_detectors_by_type,
     instantiate_detector,
 )
 from src.data import (
-    TimeSeriesData,
     generate_synthetic_series,
-    get_builtin_datasets,
     load_csv,
     load_mocap_dataset,
 )
 from src.metrics import compute_metrics, get_metrics_for_task
 from src.params import build_data_context, get_param_info, validate_params_for_detector
 from src.plotting import (
-    build_cpd_color_map,
     build_segment_color_map,
     make_annotation_figure,
     make_comparison_figure,
@@ -45,7 +40,6 @@ from src.plotting import (
     make_signal_figure,
 )
 from src.utils import (
-    ExecutionTimeoutError,
     align_states_via_hungarian,
     change_points_to_states,
     interpret_predictions,
@@ -184,6 +178,7 @@ APP_THEME = gr.themes.Base(
 # Main Gradio App
 # ============================================================================
 
+
 def create_app() -> gr.Blocks:
     all_detectors = _get_all_detector_choices()
 
@@ -191,16 +186,17 @@ def create_app() -> gr.Blocks:
         title="tsseg — Time Series Segmentation",
     ) as app:
         # -- Shared state --
-        data_state = gr.State(value=None)          # TimeSeriesData
-        data_ctx_state = gr.State(value=None)       # dict {n_samples, n_channels}
-        runs_state = gr.State(value=[])             # list of run dicts
-        last_run_state = gr.State(value=None)       # last run result dict (for add-to-comparison)
+        data_state = gr.State(value=None)  # TimeSeriesData
+        data_ctx_state = gr.State(value=None)  # dict {n_samples, n_channels}
+        runs_state = gr.State(value=[])  # list of run dicts
+        last_run_state = gr.State(value=None)  # last run result dict (for add-to-comparison)
 
         # -- Header --
         gr.Markdown(
             """
             # tsseg — Time Series Segmentation
-            Segment time series with 30+ algorithms. Upload data or use built-in datasets, compare results, evaluate with standard metrics.
+            Segment time series with 30+ algorithms. Upload data or use built-in datasets,
+            compare results, evaluate with standard metrics.
 
             <p style="text-align:center; margin-top:2px">
                 <a href="https://fchavelli.github.io/tsseg/" target="_blank">Documentation</a> &nbsp;·&nbsp;
@@ -212,6 +208,66 @@ def create_app() -> gr.Blocks:
 
         with gr.Tabs():
             # ==================================================================
+            # TAB 0 — HOME / WELCOME
+            # ==================================================================
+            with gr.Tab("Home", id="tab_home"):
+                with gr.Row():
+                    with gr.Column(scale=1, min_width=180):
+                        gr.Image(
+                            value="assets/logo.png",
+                            show_label=False,
+                            show_download_button=False,
+                            show_fullscreen_button=False,
+                            container=False,
+                            height=160,
+                            interactive=False,
+                        )
+                    with gr.Column(scale=4):
+                        gr.Markdown(
+                            """
+### Welcome to **tsseg**
+
+**tsseg** is an open-source research project on **time series segmentation**,
+unifying two complementary tasks under a single API:
+
+- **Change Point Detection (CPD)** — locate the times at which the
+  underlying generative process changes.
+- **State Detection (SD)** — additionally label every timestamp with a
+  recurring state.
+
+The project bundles together:
+
+- a **Python library** — [`tsseg`](https://github.com/fchavelli/tsseg) —
+  exposing 30+ algorithms behind a common scikit-learn / aeon-style interface;
+- this interactive **demo** (where you are);
+- companion **research papers** describing the unified API and benchmark
+  protocol (currently in review).
+                            """
+                        )
+                gr.Markdown(
+                    """
+#### How to use this demo
+
+1. Open the **Data** tab and load the sample dataset, generate a synthetic
+   series, or upload your own CSV.
+2. Move to **Segmentation**, pick an algorithm and tune its parameters
+   (use the *Use GT* button when available to reuse the true number of
+   change points / states).
+3. Add several runs to the **Comparison** view and finally score them in
+   **Evaluation**.
+                    """
+                )
+                gr.Image(
+                    value="assets/demo.png",
+                    show_label=False,
+                    show_download_button=False,
+                    show_fullscreen_button=False,
+                    container=False,
+                    height=320,
+                    interactive=False,
+                )
+
+            # ==================================================================
             # TAB 1 — DATA
             # ==================================================================
             with gr.Tab("Data", id="tab_data"):
@@ -220,36 +276,49 @@ def create_app() -> gr.Blocks:
                 with gr.Row():
                     with gr.Column(scale=1, min_width=280):
                         data_source = gr.Radio(
-                            choices=["Synthetic", "MoCap (built-in)", "Upload CSV"],
-                            value="Synthetic",
+                            choices=["Sample dataset", "Synthetic", "Upload CSV"],
+                            value="Sample dataset",
                             label="Data source",
+                            info="Sample dataset = one trial from CMU MoCap 86 (4D, real-world)",
                         )
 
                         # -- Synthetic controls --
-                        with gr.Group(visible=True) as synth_controls:
+                        with gr.Group(visible=False) as synth_controls:
                             synth_length = gr.Slider(200, 10000, value=1000, step=50, label="Length")
                             synth_segments = gr.Slider(2, 12, value=3, step=1, label="Segments")
                             synth_dims = gr.Slider(1, 8, value=2, step=1, label="Dimensions")
                             synth_pattern = gr.Dropdown(
-                                choices=["constant", "sinusoidal", "step", "stairs", "linear", "mixed"],
-                                value="sinusoidal",
+                                choices=["gp", "sinusoidal", "constant", "step", "stairs", "linear", "mixed"],
+                                value="gp",
                                 label="Pattern",
-                                info="Intra-segment waveform shape",
+                                info="Intra-segment waveform shape (gp = smooth Gaussian process)",
                             )
                             synth_recurring = gr.Checkbox(
                                 value=False,
                                 label="Recurring states",
                                 info="Allow state labels to repeat across segments",
                             )
-                            synth_min_seg = gr.Slider(5, 200, value=20, step=5,
-                                                      label="Min segment length",
-                                                      info="Minimum number of timestamps per segment")
+                            synth_min_seg = gr.Slider(
+                                5,
+                                200,
+                                value=20,
+                                step=5,
+                                label="Min segment length",
+                                info="Minimum number of timestamps per segment",
+                            )
                             synth_noise = gr.Slider(0.0, 2.0, value=0.5, step=0.05, label="Noise level")
                             synth_seed = gr.Number(value=42, label="Random seed", precision=0)
 
                         # -- MoCap controls --
-                        with gr.Group(visible=False) as mocap_controls:
-                            mocap_trial = gr.Slider(0, 8, value=0, step=1, label="Trial index")
+                        with gr.Group(visible=True) as mocap_controls:
+                            mocap_trial = gr.Slider(
+                                0,
+                                8,
+                                value=0,
+                                step=1,
+                                label="Trial index",
+                                info="9 labelled trials available (CMU MoCap 86)",
+                            )
 
                         # -- CSV Upload controls --
                         with gr.Group(visible=False) as csv_controls:
@@ -267,7 +336,7 @@ def create_app() -> gr.Blocks:
                             )
 
                         load_btn = gr.Button("Load Data", variant="primary", elem_classes="run-btn")
-                        load_example_btn = gr.Button("Load Example (MoCap)", variant="secondary")
+                        load_example_btn = gr.Button("Load Sample Dataset", variant="secondary")
 
                     with gr.Column(scale=3):
                         data_info = gr.Markdown("*No data loaded yet.*")
@@ -277,7 +346,7 @@ def create_app() -> gr.Blocks:
                 def toggle_source(source):
                     return (
                         gr.update(visible=source == "Synthetic"),
-                        gr.update(visible=source == "MoCap (built-in)"),
+                        gr.update(visible=source == "Sample dataset"),
                         gr.update(visible=source == "Upload CSV"),
                     )
 
@@ -288,8 +357,22 @@ def create_app() -> gr.Blocks:
                 )
 
                 # -- Load data handler --
-                def load_data(source, length, segments, dims, pattern, recurring, min_seg, noise, seed,
-                              trial, file, separator, header, label_col):
+                def load_data(
+                    source,
+                    length,
+                    segments,
+                    dims,
+                    pattern,
+                    recurring,
+                    min_seg,
+                    noise,
+                    seed,
+                    trial,
+                    file,
+                    separator,
+                    header,
+                    label_col,
+                ):
                     try:
                         if source == "Synthetic":
                             ts_data = generate_synthetic_series(
@@ -302,14 +385,14 @@ def create_app() -> gr.Blocks:
                                 min_segment_length=int(min_seg),
                                 random_state=int(seed) if seed is not None else None,
                             )
-                        elif source == "MoCap (built-in)":
+                        elif source == "Sample dataset":
                             ts_data = load_mocap_dataset(trial=int(trial))
                         elif source == "Upload CSV":
                             if file is None:
                                 return None, None, "*Please upload a CSV file.*", None
                             sep = "\t" if separator == "\\t" else separator
                             ts_data = load_csv(
-                                file_path=file.name if hasattr(file, 'name') else file,
+                                file_path=file.name if hasattr(file, "name") else file,
                                 separator=sep,
                                 has_header=header,
                                 label_column=label_col if label_col.strip() else None,
@@ -322,19 +405,18 @@ def create_app() -> gr.Blocks:
                             gt_info = f"Ground truth available ({ts_data.n_states} states)"
                         else:
                             gt_info = "No ground truth"
-                        info_md = (
-                            f"**{ts_data.name}** — "
-                            f"{ts_data.length} timestamps, {ts_data.n_dims} dim. "
-                            f"| {gt_info}"
-                        )
+                        info_md = f"**{ts_data.name}** — {ts_data.length} timestamps, {ts_data.n_dims} dim. | {gt_info}"
 
                         # Build plot
                         if ts_data.has_ground_truth:
                             n_states = ts_data.n_states
                             color_map = build_segment_color_map(n_states, ts_data.n_dims)
                             fig = make_annotation_figure(
-                                ts_data.signal, ts_data.change_points or [],
-                                ts_data.ground_truth, ts_data.name, color_map,
+                                ts_data.signal,
+                                ts_data.change_points or [],
+                                ts_data.ground_truth,
+                                ts_data.name,
+                                color_map,
                             )
                         else:
                             fig = make_signal_figure(ts_data.signal, ts_data.name)
@@ -350,9 +432,20 @@ def create_app() -> gr.Blocks:
                 load_btn.click(
                     load_data,
                     inputs=[
-                        data_source, synth_length, synth_segments, synth_dims,
-                        synth_pattern, synth_recurring, synth_min_seg, synth_noise, synth_seed,
-                        mocap_trial, csv_file, csv_separator, csv_header, csv_label_col,
+                        data_source,
+                        synth_length,
+                        synth_segments,
+                        synth_dims,
+                        synth_pattern,
+                        synth_recurring,
+                        synth_min_seg,
+                        synth_noise,
+                        synth_seed,
+                        mocap_trial,
+                        csv_file,
+                        csv_separator,
+                        csv_header,
+                        csv_label_col,
                     ],
                     outputs=[data_state, data_ctx_state, data_info, data_plot],
                 )
@@ -365,8 +458,11 @@ def create_app() -> gr.Blocks:
                         n_states = ts_data.n_states
                         color_map = build_segment_color_map(n_states, ts_data.n_dims)
                         fig = make_annotation_figure(
-                            ts_data.signal, ts_data.change_points or [],
-                            ts_data.ground_truth, ts_data.name, color_map,
+                            ts_data.signal,
+                            ts_data.change_points or [],
+                            ts_data.ground_truth,
+                            ts_data.name,
+                            color_map,
                         )
                         info_md = (
                             f"**{ts_data.name}** — "
@@ -418,20 +514,58 @@ def create_app() -> gr.Blocks:
                             info = all_detectors[detector_name]
 
                             task_type = "State Detection" if info.detector_type == "state_detection" else "CPD"
-                            gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}")
+
+                            # --- Header: name · task · family · complexity badge ---
+                            from src.about_data import (
+                                COMPLEXITY_COLORS,
+                                COMPLEXITY_GLOSSARY_MD,
+                                COMPLEXITY_LABELS,
+                            )
+
+                            complexity_html = ""
+                            if info.complexity:
+                                tier = info.complexity_tier or "linear"
+                                color = COMPLEXITY_COLORS.get(tier, "#555")
+                                tier_label = COMPLEXITY_LABELS.get(tier, tier)
+                                complexity_html = (
+                                    f' · <span title="Time complexity ({tier_label})" '
+                                    f'style="color:{color};font-weight:500;">'
+                                    f"${info.complexity}$</span>"
+                                )
+                            gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}{complexity_html}")
+                            if info.complexity:
+                                with gr.Accordion("Complexity notation — what do n, d, l, n_cp, n_s mean?", open=False):
+                                    gr.Markdown(COMPLEXITY_GLOSSARY_MD)
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)
+
+                            # Reorder: parameters that represent the number of
+                            # change points / states / segments / clusters
+                            # should appear at the top of the list — the "Use GT"
+                            # shortcut is most useful when it's immediately visible.
+                            _GT_PARAM_NAMES = {
+                                "n_cps",
+                                "n_bkps",
+                                "n_components",
+                                "n_states",
+                                "n_clusters",
+                                "n_segments",
+                                "n_regimes",
+                                "k_max",
+                                "n_change_points",
+                            }
+                            if param_infos:
+                                gt_params = [p for p in param_infos if p["name"] in _GT_PARAM_NAMES]
+                                other_params = [p for p in param_infos if p["name"] not in _GT_PARAM_NAMES]
+                                param_infos = gt_params + other_params
+
                             if not param_infos:
                                 gr.Markdown("*No configurable parameters.*")
                             else:
                                 gr.Markdown("#### Parameters")
 
                             # Show warnings for auto-adjusted defaults
-                            adjustments = [
-                                p["adjust_reason"]
-                                for p in param_infos
-                                if p.get("adjusted")
-                            ]
+                            adjustments = [p["adjust_reason"] for p in param_infos if p.get("adjusted")]
                             if adjustments:
                                 adj_md = "\n".join(f"- {a}" for a in adjustments)
                                 gr.Markdown(
@@ -458,12 +592,14 @@ def create_app() -> gr.Blocks:
 
                                 if p["type"] == "bool":
                                     components[p["name"]] = gr.Checkbox(
-                                        value=p["default"], label=p["name"], key=key,
+                                        value=p["default"],
+                                        label=p["name"],
+                                        key=key,
                                         info=desc,
                                         interactive=True,
                                     )
                                 elif p["type"] == "int":
-                                    is_n_cps = p["name"] in ("n_cps", "n_bkps", "n_components")
+                                    is_n_cps = p["name"] in _GT_PARAM_NAMES
                                     if is_n_cps:
                                         with gr.Row():
                                             num_comp = gr.Number(
@@ -476,16 +612,28 @@ def create_app() -> gr.Blocks:
                                                 scale=3,
                                             )
                                             gt_btn = gr.Button(
-                                                "Use GT", variant="secondary",
-                                                scale=1, min_width=70,
+                                                "Use GT",
+                                                variant="secondary",
+                                                scale=1,
+                                                min_width=70,
                                                 key=f"gt_{detector_name}_{p['name']}",
                                             )
+
+                                        # Map the parameter name to the right GT quantity:
+                                        # state-count params → number of distinct states,
+                                        # change-point-count params → number of CPs (or segments).
+                                        _STATE_LIKE = {"n_states", "n_clusters", "n_regimes", "k_max"}
+                                        _SEG_LIKE = {"n_segments"}
 
                                         def _set_gt_value(ts_data, _pname=p["name"]):
                                             if ts_data is None or not ts_data.has_ground_truth:
                                                 return gr.update()
-                                            n_gt = len(ts_data.change_points) if ts_data.change_points else 0
-                                            return gr.update(value=n_gt)
+                                            n_cps = len(ts_data.change_points) if ts_data.change_points else 0
+                                            if _pname in _STATE_LIKE:
+                                                return gr.update(value=int(ts_data.n_states))
+                                            if _pname in _SEG_LIKE:
+                                                return gr.update(value=n_cps + 1)
+                                            return gr.update(value=n_cps)
 
                                         gt_btn.click(
                                             _set_gt_value,
@@ -574,7 +722,9 @@ def create_app() -> gr.Blocks:
 
                                 # --- Validate & auto-adjust params via schema ---
                                 params, v_warnings, v_errors = validate_params_for_detector(
-                                    info.cls, params, data_ctx=cur_data_ctx,
+                                    info.cls,
+                                    params,
+                                    data_ctx=cur_data_ctx,
                                 )
                                 if v_errors:
                                     err_md = "\n".join(f"- {e}" for e in v_errors)
@@ -583,21 +733,17 @@ def create_app() -> gr.Blocks:
                                         warn_md = "\n\n⚠️ Adjustments:\n" + "\n".join(f"- {w}" for w in v_warnings)
                                     return f"**Validation errors:**\n{err_md}{warn_md}", None, None
 
-                                expect_states = (info.detector_type == "state_detection")
+                                expect_states = info.detector_type == "state_detection"
 
                                 try:
                                     t0 = time.time()
                                     output = _run_detector(info, params, ts_data.signal)
                                     elapsed = time.time() - t0
 
-                                    pred_states, pred_cps = interpret_predictions(
-                                        output, ts_data.length, expect_states
-                                    )
+                                    pred_states, pred_cps = interpret_predictions(output, ts_data.length, expect_states)
 
                                     if expect_states and pred_states is not None and ts_data.has_ground_truth:
-                                        pred_states = align_states_via_hungarian(
-                                            ts_data.ground_truth, pred_states
-                                        )
+                                        pred_states = align_states_via_hungarian(ts_data.ground_truth, pred_states)
                                         pred_cps = states_to_change_points(pred_states)
 
                                     n_states_max = max(
@@ -619,8 +765,7 @@ def create_app() -> gr.Blocks:
                                     n_cps = len(pred_cps) if pred_cps else 0
                                     n_st = int(np.max(pred_states) + 1) if pred_states is not None else "—"
                                     result_md = (
-                                        f"**{detector_name}** — {elapsed:.2f}s — "
-                                        f"{n_cps} change points, {n_st} states"
+                                        f"**{detector_name}** — {elapsed:.2f}s — {n_cps} change points, {n_st} states"
                                     )
                                     if v_warnings:
                                         result_md += "\n\n⚠️ " + " · ".join(v_warnings)
@@ -674,7 +819,7 @@ def create_app() -> gr.Blocks:
 
                     # -- RIGHT: results plot (always visible, updates on Run / data load) --
                     with gr.Column(scale=2):
-                        seg_result_info = gr.Markdown("*Run an algorithm to see results here.*")
+                        gr.Markdown("*Run an algorithm to see results here.*")
                         seg_data_preview = gr.Plot(label="Data preview", visible=True)
                         seg_result_plot = gr.Plot(label="Segmentation result")
 
@@ -687,8 +832,11 @@ def create_app() -> gr.Blocks:
                         n_states = ts_data.n_states
                         color_map = build_segment_color_map(n_states, ts_data.n_dims)
                         fig = make_annotation_figure(
-                            ts_data.signal, ts_data.change_points or [],
-                            ts_data.ground_truth, ts_data.name, color_map,
+                            ts_data.signal,
+                            ts_data.change_points or [],
+                            ts_data.ground_truth,
+                            ts_data.name,
+                            color_map,
                         )
                     else:
                         fig = make_signal_figure(ts_data.signal, ts_data.name)
@@ -725,20 +873,24 @@ def create_app() -> gr.Blocks:
                     for i, run in enumerate(runs):
                         ps = np.array(run["pred_states"]) if run.get("pred_states") else None
                         pc = run.get("pred_cps", [])
-                        plot_runs.append({
-                            "name": f"{i+1}. {run['name']}",
-                            "pred_states": ps,
-                            "pred_cps": pc,
-                            "task": run.get("task", "change_point_detection"),
-                        })
-                        table_data.append({
-                            "Run": i + 1,
-                            "Algorithm": run["name"],
-                            "Task": TASK_LABELS_INV.get(run.get("task", ""), run.get("task", "")),
-                            "# CPs": len(pc),
-                            "# States": int(np.max(ps) + 1) if ps is not None else "—",
-                            "Params": _format_params(run.get("params", {})),
-                        })
+                        plot_runs.append(
+                            {
+                                "name": f"{i + 1}. {run['name']}",
+                                "pred_states": ps,
+                                "pred_cps": pc,
+                                "task": run.get("task", "change_point_detection"),
+                            }
+                        )
+                        table_data.append(
+                            {
+                                "Run": i + 1,
+                                "Algorithm": run["name"],
+                                "Task": TASK_LABELS_INV.get(run.get("task", ""), run.get("task", "")),
+                                "# CPs": len(pc),
+                                "# States": int(np.max(ps) + 1) if ps is not None else "—",
+                                "Params": _format_params(run.get("params", {})),
+                            }
+                        )
 
                     fig = make_multi_comparison_figure(
                         ts_data.signal,
@@ -825,7 +977,11 @@ def create_app() -> gr.Blocks:
                     if ts_data is None:
                         return "Load data first.", None, None
                     if not ts_data.has_ground_truth:
-                        return "No ground truth available. Upload data with labels or use a built-in dataset.", None, None
+                        return (
+                            "No ground truth available. Upload data with labels or use a built-in dataset.",
+                            None,
+                            None,
+                        )
                     if not runs:
                         return "No runs to evaluate. Add runs from the Segmentation tab.", None, None
 
@@ -847,7 +1003,7 @@ def create_app() -> gr.Blocks:
                         if task == "state_detection" and run_task == "change_point_detection":
                             # CPD-only algo cannot be evaluated with SD metrics
                             skipped.append(
-                                f"{i+1}. {run['name']} (CPD-only — incompatible with State Detection metrics)"
+                                f"{i + 1}. {run['name']} (CPD-only — incompatible with State Detection metrics)"
                             )
                             continue
 
@@ -855,28 +1011,32 @@ def create_app() -> gr.Blocks:
                             y_pred = change_points_to_states(pred_cps, ts_data.length)
                         else:
                             # State Detection evaluation
-                            y_pred = pred_states if pred_states is not None else change_points_to_states(pred_cps, ts_data.length)
+                            y_pred = (
+                                pred_states
+                                if pred_states is not None
+                                else change_points_to_states(pred_cps, ts_data.length)
+                            )
 
                         if y_pred is None:
-                            skipped.append(f"{i+1}. {run['name']} (no valid predictions)")
+                            skipped.append(f"{i + 1}. {run['name']} (no valid predictions)")
                             continue
 
                         scores = compute_metrics(
-                            ts_data.ground_truth, y_pred, task,
+                            ts_data.ground_truth,
+                            y_pred,
+                            task,
                             selected_metrics=selected,
                             metric_params=metric_params,
                         )
 
                         # Filter out Bidirectional Covering sub-scores
                         scores = {
-                            k: v for k, v in scores.items()
-                            if not (
-                                k.startswith("Bidirectional Covering (")
-                                and k != "Bidirectional Covering"
-                            )
+                            k: v
+                            for k, v in scores.items()
+                            if not (k.startswith("Bidirectional Covering (") and k != "Bidirectional Covering")
                         }
 
-                        scores["Algorithm"] = f"{i+1}. {run['name']}"
+                        scores["Algorithm"] = f"{i + 1}. {run['name']}"
                         all_results.append(scores)
 
                     if not all_results:
@@ -926,12 +1086,12 @@ def create_app() -> gr.Blocks:
             # ==================================================================
             with gr.Tab("About", id="tab_about"):
                 from src.about_data import (
-                    build_algo_table,
-                    build_dataset_table,
-                    build_metric_table,
                     DISCLAIMER_MD,
                     LINKS_MD,
                     MOCAP_NOTE_MD,
+                    build_algo_table,
+                    build_dataset_table,
+                    build_metric_table,
                 )
 
                 algo_table = build_algo_table()
@@ -946,6 +1106,9 @@ def create_app() -> gr.Blocks:
 This app exposes 25+ algorithms through an interactive interface.
 State detection algorithms are also available under the CPD task, since change points
 can be inferred from detected states.
+
+The *Complexity* column reports asymptotic time complexity using the variables
+defined in the parameters panel (n, d, l, n_cp, n_s).
 
 ---
 

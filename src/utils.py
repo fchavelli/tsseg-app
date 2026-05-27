@@ -9,7 +9,6 @@ from typing import Any, Callable, Sequence
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-
 # ---------------------------------------------------------------------------
 # Execution timeout
 # ---------------------------------------------------------------------------
@@ -33,8 +32,7 @@ def run_with_timeout(fn: Callable, *args, timeout: int = DEFAULT_TIMEOUT, **kwar
             return future.result(timeout=timeout)
         except concurrent.futures.TimeoutError:
             raise ExecutionTimeoutError(
-                f"Execution timed out after {timeout}s. "
-                f"Try a smaller dataset or simpler algorithm parameters."
+                f"Execution timed out after {timeout}s. Try a smaller dataset or simpler algorithm parameters."
             ) from None
 
 

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import io
 import math
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Literal, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
-PatternType = Literal["constant", "sinusoidal", "step", "stairs", "linear", "mixed"]
+PatternType = Literal["constant", "sinusoidal", "step", "stairs", "linear", "mixed", "gp"]
 
 MAX_UPLOAD_POINTS = 200_000  # safety limit for HF Spaces
 
@@ -55,6 +54,7 @@ def _states_to_cps(states: np.ndarray) -> list[int]:
 # ---------------------------------------------------------------------------
 # Synthetic Data
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SyntheticSeries:
@@ -123,14 +123,16 @@ def _complex_segment(start, stop, n_dims, trend, curvature, freq, noise_level, r
 
 # -- Pattern-based segment generators --
 
+
 def _gen_constant(length: int, n_dims: int, level: float, noise_level: float, rng) -> np.ndarray:
     """Flat segment at a given level."""
     noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
     return np.full((length, n_dims), level) + noise
 
 
-def _gen_sinusoidal(length: int, n_dims: int, amplitude: float, freq: float,
-                    phase: float, offset: float, noise_level: float, rng) -> np.ndarray:
+def _gen_sinusoidal(
+    length: int, n_dims: int, amplitude: float, freq: float, phase: float, offset: float, noise_level: float, rng
+) -> np.ndarray:
     """Sinusoidal segment."""
     t = np.linspace(0, 1, length, endpoint=False)
     base = amplitude * np.sin(2 * math.pi * (freq * t + phase)) + offset
@@ -138,8 +140,7 @@ def _gen_sinusoidal(length: int, n_dims: int, amplitude: float, freq: float,
     return np.tile(base[:, None], (1, n_dims)) + noise
 
 
-def _gen_step(length: int, n_dims: int, levels: Sequence[float],
-              noise_level: float, rng) -> np.ndarray:
+def _gen_step(length: int, n_dims: int, levels: Sequence[float], noise_level: float, rng) -> np.ndarray:
     """Piecewise-constant (step function) within a single segment."""
     n_steps = len(levels)
     step_len = length // n_steps
@@ -152,8 +153,9 @@ def _gen_step(length: int, n_dims: int, levels: Sequence[float],
     return out + noise
 
 
-def _gen_stairs(length: int, n_dims: int, start_level: float, step_size: float,
-                n_stairs: int, noise_level: float, rng) -> np.ndarray:
+def _gen_stairs(
+    length: int, n_dims: int, start_level: float, step_size: float, n_stairs: int, noise_level: float, rng
+) -> np.ndarray:
     """Staircase pattern — monotonically increasing within the segment."""
     stair_len = length // max(n_stairs, 1)
     out = np.empty((length, n_dims))
@@ -165,8 +167,7 @@ def _gen_stairs(length: int, n_dims: int, start_level: float, step_size: float,
     return out + noise
 
 
-def _gen_linear(length: int, n_dims: int, start_val: float, end_val: float,
-                noise_level: float, rng) -> np.ndarray:
+def _gen_linear(length: int, n_dims: int, start_val: float, end_val: float, noise_level: float, rng) -> np.ndarray:
     """Linear trend."""
     t = np.linspace(start_val, end_val, length)
     noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
@@ -179,7 +180,53 @@ _PATTERN_GENERATORS = {
     "step": "step",
     "stairs": "stairs",
     "linear": "linear",
+    "gp": "gp",
 }
+
+
+# -- Gaussian-process based segment (smooth, state-dependent) --
+
+
+def _rbf_kernel(t: np.ndarray, lengthscale: float, variance: float = 1.0) -> np.ndarray:
+    """Squared-exponential covariance matrix on a 1-D grid."""
+    diff = t[:, None] - t[None, :]
+    return variance * np.exp(-0.5 * (diff / max(lengthscale, 1e-3)) ** 2)
+
+
+def _sample_gp(length: int, n_dims: int, lengthscale: float, variance: float, rng: np.random.Generator) -> np.ndarray:
+    """Sample ``n_dims`` independent GP draws on a unit-interval grid of length ``length``.
+
+    Uses a low-rank Cholesky with a tiny jitter for numerical stability.
+    """
+    if length <= 1:
+        return rng.normal(size=(length, n_dims))
+    t = np.linspace(0.0, 1.0, length)
+    K = _rbf_kernel(t, lengthscale=lengthscale, variance=variance)
+    K = K + 1e-6 * np.eye(length)
+    try:
+        L = np.linalg.cholesky(K)
+    except np.linalg.LinAlgError:
+        # Fall back to eigendecomposition if Cholesky fails
+        w, V = np.linalg.eigh(K)
+        w = np.clip(w, 1e-10, None)
+        L = V * np.sqrt(w)
+    z = rng.normal(size=(length, n_dims))
+    return L @ z
+
+
+def _gen_gp(
+    length: int,
+    n_dims: int,
+    lengthscale: float,
+    variance: float,
+    offset: float,
+    noise_level: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Smooth Gaussian-process segment with state-dependent statistics."""
+    base = _sample_gp(length, n_dims, lengthscale=lengthscale, variance=variance, rng=rng)
+    noise = rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+    return base + offset + noise
 
 
 def _generate_segment_by_pattern(
@@ -213,9 +260,17 @@ def _generate_segment_by_pattern(
         s = rng.uniform(-2, 2)
         e = rng.uniform(-2, 2)
         return _gen_linear(length, n_dims, s, e, noise_level, rng)
+    elif pattern == "gp":
+        # State-dependent GP hyper-parameters give each state a distinct "texture".
+        # Use the state_idx to seed the variation deterministically.
+        sub_rng = np.random.default_rng(int(rng.integers(0, 2**31)) + state_idx * 7919)
+        lengthscale = float(sub_rng.uniform(0.04, 0.20))
+        variance = float(sub_rng.uniform(0.4, 1.8))
+        offset = float(sub_rng.uniform(-1.5, 1.5))
+        return _gen_gp(length, n_dims, lengthscale, variance, offset, noise_level, sub_rng)
     elif pattern == "mixed":
         # Pick a random pattern (excluding mixed itself)
-        choice = rng.choice(["constant", "sinusoidal", "step", "stairs", "linear"])
+        choice = rng.choice(["constant", "sinusoidal", "step", "stairs", "linear", "gp"])
         return _generate_segment_by_pattern(choice, state_idx, length, n_dims, noise_level, rng)
     else:
         # Fallback to constant
@@ -226,10 +281,11 @@ def generate_synthetic_series(
     length: int = 1000,
     n_segments: int = 3,
     n_dims: int = 2,
-    pattern: PatternType = "sinusoidal",
+    pattern: PatternType = "gp",
     noise_level: float = 0.5,
     recurring_states: bool = False,
     min_segment_length: int = 20,
+    continuous: bool = True,
     random_state: int | None = None,
 ) -> TimeSeriesData:
     """Generate a synthetic multivariate time series with labelled segments.
@@ -238,12 +294,17 @@ def generate_synthetic_series(
     ----------
     pattern : str
         Intra-segment waveform: 'constant', 'sinusoidal', 'step', 'stairs',
-        'linear', or 'mixed' (random per segment).
+        'linear', 'gp' (Gaussian process, smooth and state-dependent),
+        or 'mixed' (random per segment).
     recurring_states : bool
         If True, state labels can repeat (fewer distinct states than segments).
         Useful for testing state-detection algorithms.
     min_segment_length : int
         Minimum length of each segment (default 20).
+    continuous : bool
+        If True, shift each segment so its first value matches the last value
+        of the previous segment, removing artificial discontinuities at the
+        boundaries (purely cosmetic; does not affect state labels).
     """
     if length <= 0:
         raise ValueError("length must be positive")
@@ -254,7 +315,9 @@ def generate_synthetic_series(
 
     rng = np.random.default_rng(random_state)
     change_points = _generate_boundaries(
-        length=length, n_segments=n_segments, rng=rng,
+        length=length,
+        n_segments=n_segments,
+        rng=rng,
         min_segment_length=min_segment_length,
     )
     boundaries = [0, *change_points, length]
@@ -292,6 +355,14 @@ def generate_synthetic_series(
             seg_rng = rng
 
         segment = _generate_segment_by_pattern(pattern, sid, seg_len, n_dims, noise_level, seg_rng)
+
+        # Stitch segment to previous endpoint to suppress visual discontinuities
+        # at the boundary (does not change the state label or boundary index).
+        if continuous and seg_idx > 0 and seg_len > 0:
+            prev_end = signal[start - 1]  # shape (n_dims,)
+            shift = prev_end - segment[0]
+            segment = segment + shift
+
         signal[start:stop] = segment
         states[start:stop] = sid
 
@@ -312,7 +383,7 @@ MOCAP_TRIALS = list(range(9))
 
 
 def load_mocap_dataset(trial: int = 0) -> TimeSeriesData:
-    """Load a MoCap trial from tsseg built-in datasets."""
+    """Load a sample CMU MoCap 86 trial from tsseg built-in datasets."""
     from tsseg.data.datasets import load_mocap
 
     X, y = load_mocap(trial=trial, return_X_y=True)
@@ -321,15 +392,17 @@ def load_mocap_dataset(trial: int = 0) -> TimeSeriesData:
     return TimeSeriesData(
         signal=X,
         ground_truth=y,
-        name=f"MoCap (trial {trial})",
+        name=f"Sample dataset (CMU MoCap 86, trial {trial})",
     )
 
 
 def get_builtin_datasets() -> dict[str, dict]:
     """Return available built-in datasets metadata."""
     return {
-        "MoCap": {
-            "description": "CMU MoCap 86 — humeral/femoral angles, 4 dimensions, 9 trials",
+        "Sample dataset": {
+            "description": (
+                "A real-world trial from CMU MoCap 86 — humeral & femoral angles, 4 dimensions, 9 labelled trials."
+            ),
             "loader": load_mocap_dataset,
             "params": {"trial": {"type": "int", "choices": MOCAP_TRIALS, "default": 0}},
         },
@@ -339,6 +412,7 @@ def get_builtin_datasets() -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 # CSV Upload
 # ---------------------------------------------------------------------------
+
 
 def load_csv(
     file_path: str,
@@ -364,8 +438,7 @@ def load_csv(
 
     if len(df) > MAX_UPLOAD_POINTS:
         raise ValueError(
-            f"File too large: {len(df)} rows (max {MAX_UPLOAD_POINTS}). "
-            "Please truncate or subsample your data."
+            f"File too large: {len(df)} rows (max {MAX_UPLOAD_POINTS}). Please truncate or subsample your data."
         )
 
     ground_truth = None
@@ -375,9 +448,18 @@ def load_csv(
     elif label_column and label_column not in df.columns:
         # Try auto-detect common names
         for candidate in [
-            "label", "labels", "ground_truth", "gt",
-            "state", "states", "class", "segment",
-            "is_anomaly", "anomaly", "target", "y",
+            "label",
+            "labels",
+            "ground_truth",
+            "gt",
+            "state",
+            "states",
+            "class",
+            "segment",
+            "is_anomaly",
+            "anomaly",
+            "target",
+            "y",
         ]:
             if candidate in df.columns:
                 ground_truth = df[candidate].values.astype(int)
@@ -386,9 +468,18 @@ def load_csv(
     else:
         # No label_column specified — still try auto-detect
         for candidate in [
-            "label", "labels", "ground_truth", "gt",
-            "state", "states", "class", "segment",
-            "is_anomaly", "anomaly", "target", "y",
+            "label",
+            "labels",
+            "ground_truth",
+            "gt",
+            "state",
+            "states",
+            "class",
+            "segment",
+            "is_anomaly",
+            "anomaly",
+            "target",
+            "y",
         ]:
             if candidate in df.columns:
                 ground_truth = df[candidate].values.astype(int)
@@ -397,8 +488,16 @@ def load_csv(
 
     # Drop common index / timestamp columns that are not signal data
     _INDEX_COLS = {
-        "timestamp", "timestamps", "time", "date", "datetime",
-        "index", "idx", "id", "row", "step",
+        "timestamp",
+        "timestamps",
+        "time",
+        "date",
+        "datetime",
+        "index",
+        "idx",
+        "id",
+        "row",
+        "step",
     }
     cols_to_drop = [c for c in df.columns if str(c).lower().strip() in _INDEX_COLS]
     if cols_to_drop:

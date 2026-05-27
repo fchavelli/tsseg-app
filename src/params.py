@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -108,6 +107,7 @@ def get_tunable_ranges(detector_name: str) -> Dict[str, list]:
 # ---------------------------------------------------------------------------
 # Schema-aware parameter info
 # ---------------------------------------------------------------------------
+
 
 def _has_parameter_schema(cls: type) -> bool:
     """Return True if *cls* declares a non-empty ``_parameter_schema``."""
@@ -242,9 +242,9 @@ def _param_info_from_schema(
                     info["default"] = clamped
                     info["adjusted"] = True
                     info["adjust_reason"] = (
-                        f"Default {pname}={default} adjusted to {clamped} "
-                        f"(series of {data_ctx['n_samples']} points)"
-                        if data_ctx else f"Default {pname}={default} out of bounds, adjusted to {clamped}"
+                        f"Default {pname}={default} adjusted to {clamped} (series of {data_ctx['n_samples']} points)"
+                        if data_ctx
+                        else f"Default {pname}={default} out of bounds, adjusted to {clamped}"
                     )
         elif ptype == "float":
             info["type"] = "float"
@@ -260,9 +260,9 @@ def _param_info_from_schema(
                     info["default"] = clamped
                     info["adjusted"] = True
                     info["adjust_reason"] = (
-                        f"Default {pname}={default} adjusted to {clamped} "
-                        f"(series of {data_ctx['n_samples']} points)"
-                        if data_ctx else f"Default {pname}={default} out of bounds, adjusted to {clamped}"
+                        f"Default {pname}={default} adjusted to {clamped} (series of {data_ctx['n_samples']} points)"
+                        if data_ctx
+                        else f"Default {pname}={default} out of bounds, adjusted to {clamped}"
                     )
         elif ptype == "str":
             info["type"] = "str"
@@ -426,7 +426,8 @@ def validate_params_for_detector(
     if not _has_parameter_schema(cls):
         return params, [], []
 
-    from tsseg.algorithms.param_schema import get_ui_hints, validate_params as _validate
+    from tsseg.algorithms.param_schema import get_ui_hints
+    from tsseg.algorithms.param_schema import validate_params as _validate
 
     hints = get_ui_hints(cls, data_ctx=data_ctx)
     adjusted = dict(params)
@@ -451,8 +452,7 @@ def validate_params_for_detector(
                 adjusted[pname] = clamped
                 if data_ctx:
                     warnings.append(
-                        f"**{pname}** = {val} → {clamped} "
-                        f"(series: {data_ctx.get('n_samples', '?')} points)"
+                        f"**{pname}** = {val} → {clamped} (series: {data_ctx.get('n_samples', '?')} points)"
                     )
                 else:
                     warnings.append(f"**{pname}** = {val} → {clamped} (out of bounds)")

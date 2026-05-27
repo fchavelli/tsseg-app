@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 
 class TestData:
@@ -25,8 +24,9 @@ class TestData:
     def test_generate_synthetic_recurring(self):
         from src.data import generate_synthetic_series
 
-        ts = generate_synthetic_series(length=500, n_segments=5, pattern="sinusoidal",
-                                       recurring_states=True, random_state=0)
+        ts = generate_synthetic_series(
+            length=500, n_segments=5, pattern="sinusoidal", recurring_states=True, random_state=0
+        )
         assert ts.length == 500
         # Fewer distinct states than segments
         assert ts.n_states < 5
