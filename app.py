@@ -216,8 +216,6 @@ def create_app() -> gr.Blocks:
                         gr.Image(
                             value="assets/logo.png",
                             show_label=False,
-                            show_download_button=False,
-                            show_fullscreen_button=False,
                             container=False,
                             height=160,
                             interactive=False,
@@ -260,8 +258,6 @@ The project bundles together:
                 gr.Image(
                     value="assets/demo.png",
                     show_label=False,
-                    show_download_button=False,
-                    show_fullscreen_button=False,
                     container=False,
                     height=320,
                     interactive=False,
