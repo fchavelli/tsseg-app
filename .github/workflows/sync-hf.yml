@@ -15,6 +15,24 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Set up Git LFS
+        run: |
+          git lfs install
+
+      - name: Migrate binary assets to LFS
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Track PNG assets via LFS so the Hugging Face Space pre-receive hook
+          # (which rejects large binary blobs) accepts the push.
+          git lfs track "assets/*.png"
+          git add .gitattributes
+
+          # Rewrite history on this ephemeral checkout so the offending PNG
+          # blobs are stored as LFS pointers on every commit that touches them.
+          git lfs migrate import --include="assets/*.png" --everything --yes
+
       - name: Push to HuggingFace Hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
