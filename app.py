@@ -284,10 +284,18 @@ The project bundles together:
                             synth_segments = gr.Slider(2, 12, value=3, step=1, label="Segments")
                             synth_dims = gr.Slider(1, 8, value=2, step=1, label="Dimensions")
                             synth_pattern = gr.Dropdown(
-                                choices=["gp", "sinusoidal", "constant", "step", "stairs", "linear", "mixed"],
+                                choices=[
+                                    ("Gaussian processes", "gp"),
+                                    ("Sinusoidal", "sinusoidal"),
+                                    ("Constant", "constant"),
+                                    ("Step", "step"),
+                                    ("Stairs", "stairs"),
+                                    ("Linear", "linear"),
+                                    ("Mixed", "mixed"),
+                                ],
                                 value="gp",
                                 label="Pattern",
-                                info="Intra-segment waveform shape (gp = smooth Gaussian process)",
+                                info="Intra-segment waveform shape",
                             )
                             synth_recurring = gr.Checkbox(
                                 value=False,
@@ -516,6 +524,7 @@ The project bundles together:
                                 COMPLEXITY_COLORS,
                                 COMPLEXITY_GLOSSARY_MD,
                                 COMPLEXITY_LABELS,
+                                format_complexity_plain,
                             )
 
                             complexity_html = ""
@@ -523,14 +532,15 @@ The project bundles together:
                                 tier = info.complexity_tier or "linear"
                                 color = COMPLEXITY_COLORS.get(tier, "#555")
                                 tier_label = COMPLEXITY_LABELS.get(tier, tier)
+                                complexity_text = format_complexity_plain(info.complexity)
                                 complexity_html = (
                                     f' · <span title="Time complexity ({tier_label})" '
-                                    f'style="color:{color};font-weight:500;">'
-                                    f"${info.complexity}$</span>"
+                                    f'style="color:{color};font-weight:500;font-family:ui-monospace,monospace;">'
+                                    f"{complexity_text}</span>"
                                 )
                             gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}{complexity_html}")
                             if info.complexity:
-                                with gr.Accordion("Complexity notation — what do n, d, l, n_cp, n_s mean?", open=False):
+                                with gr.Accordion("Complexity notation (n, d, l, n_cp, n_s)", open=False):
                                     gr.Markdown(COMPLEXITY_GLOSSARY_MD)
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)

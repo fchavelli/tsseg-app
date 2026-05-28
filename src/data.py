@@ -235,46 +235,66 @@ def _generate_segment_by_pattern(
     length: int,
     n_dims: int,
     noise_level: float,
-    rng: np.random.Generator,
+    shape_rng: np.random.Generator,
+    noise_rng: np.random.Generator | None = None,
 ) -> np.ndarray:
-    """Generate one segment according to the chosen pattern type."""
+    """Generate one segment according to the chosen pattern type.
+
+    Parameters
+    ----------
+    shape_rng : numpy Generator
+        Drives all *shape* draws (waveform parameters, GP hyper-parameters,
+        mixed-pattern choice, GP base realization). Seed it from the state id
+        so that recurring segments of the same state share the same generative
+        process.
+    noise_rng : numpy Generator, optional
+        Drives the additive observation noise. If ``None``, ``shape_rng`` is
+        reused (pixel-identical recurring states). Pass a per-segment RNG to
+        keep the shape consistent across recurrences while varying noise.
+    """
+    if noise_rng is None:
+        noise_rng = shape_rng
     if pattern == "constant":
-        level = rng.uniform(-2, 2)
-        return _gen_constant(length, n_dims, level, noise_level, rng)
+        level = shape_rng.uniform(-2, 2)
+        return _gen_constant(length, n_dims, level, noise_level, noise_rng)
     elif pattern == "sinusoidal":
-        amp = rng.uniform(0.5, 2.0)
-        freq = rng.uniform(1.0, 4.0)
-        phase = rng.uniform(0, 1)
-        offset = rng.uniform(-1, 1)
-        return _gen_sinusoidal(length, n_dims, amp, freq, phase, offset, noise_level, rng)
+        amp = shape_rng.uniform(0.5, 2.0)
+        freq = shape_rng.uniform(1.0, 4.0)
+        phase = shape_rng.uniform(0, 1)
+        offset = shape_rng.uniform(-1, 1)
+        return _gen_sinusoidal(length, n_dims, amp, freq, phase, offset, noise_level, noise_rng)
     elif pattern == "step":
-        n_steps = rng.integers(2, 5)
-        levels = rng.uniform(-2, 2, size=n_steps).tolist()
-        return _gen_step(length, n_dims, levels, noise_level, rng)
+        n_steps = int(shape_rng.integers(2, 5))
+        levels = shape_rng.uniform(-2, 2, size=n_steps).tolist()
+        return _gen_step(length, n_dims, levels, noise_level, noise_rng)
     elif pattern == "stairs":
-        start = rng.uniform(-2, 1)
-        step_size = rng.uniform(0.3, 1.0) * rng.choice([-1, 1])
-        n_stairs = rng.integers(3, 7)
-        return _gen_stairs(length, n_dims, start, step_size, n_stairs, noise_level, rng)
+        start = shape_rng.uniform(-2, 1)
+        step_size = shape_rng.uniform(0.3, 1.0) * shape_rng.choice([-1, 1])
+        n_stairs = int(shape_rng.integers(3, 7))
+        return _gen_stairs(length, n_dims, start, step_size, n_stairs, noise_level, noise_rng)
     elif pattern == "linear":
-        s = rng.uniform(-2, 2)
-        e = rng.uniform(-2, 2)
-        return _gen_linear(length, n_dims, s, e, noise_level, rng)
+        s = shape_rng.uniform(-2, 2)
+        e = shape_rng.uniform(-2, 2)
+        return _gen_linear(length, n_dims, s, e, noise_level, noise_rng)
     elif pattern == "gp":
-        # State-dependent GP hyper-parameters give each state a distinct "texture".
-        # Use the state_idx to seed the variation deterministically.
-        sub_rng = np.random.default_rng(int(rng.integers(0, 2**31)) + state_idx * 7919)
-        lengthscale = float(sub_rng.uniform(0.04, 0.20))
-        variance = float(sub_rng.uniform(0.4, 1.8))
-        offset = float(sub_rng.uniform(-1.5, 1.5))
-        return _gen_gp(length, n_dims, lengthscale, variance, offset, noise_level, sub_rng)
+        # All shape draws (hyper-parameters AND base GP sample) use shape_rng,
+        # so two segments sharing the same state produce the same realization.
+        lengthscale = float(shape_rng.uniform(0.04, 0.20))
+        variance = float(shape_rng.uniform(0.4, 1.8))
+        offset = float(shape_rng.uniform(-1.5, 1.5))
+        base = _sample_gp(length, n_dims, lengthscale=lengthscale, variance=variance, rng=shape_rng)
+        noise = noise_rng.normal(scale=max(0.05 * noise_level, 1e-12), size=(length, n_dims))
+        return base + offset + noise
     elif pattern == "mixed":
-        # Pick a random pattern (excluding mixed itself)
-        choice = rng.choice(["constant", "sinusoidal", "step", "stairs", "linear", "gp"])
-        return _generate_segment_by_pattern(choice, state_idx, length, n_dims, noise_level, rng)
+        # Pick a sub-pattern deterministically from shape_rng so two segments
+        # of the same recurring state pick the SAME sub-pattern.
+        choice = shape_rng.choice(["constant", "sinusoidal", "step", "stairs", "linear", "gp"])
+        return _generate_segment_by_pattern(
+            choice, state_idx, length, n_dims, noise_level, shape_rng, noise_rng
+        )
     else:
         # Fallback to constant
-        return _gen_constant(length, n_dims, float(state_idx), noise_level, rng)
+        return _gen_constant(length, n_dims, float(state_idx), noise_level, noise_rng)
 
 
 def generate_synthetic_series(
@@ -339,22 +359,25 @@ def generate_synthetic_series(
     states = np.zeros(length, dtype=int)
     signal = np.zeros((length, n_dims), dtype=float)
 
-    # Pre-generate a signature per distinct state so recurring states look alike
+    # One seed per *distinct state* drives all shape draws (waveform params,
+    # GP hyper-params, mixed sub-pattern choice). Two segments sharing the
+    # same state thus share the same generative process. A separate per-segment
+    # seed drives only the additive observation noise, so recurring segments
+    # look alike without being pixel-identical.
     distinct_states = sorted(set(state_ids))
     state_seeds: dict[int, int] = {s: int(rng.integers(0, 2**31)) for s in distinct_states}
+    noise_seeds: list[int] = [int(rng.integers(0, 2**31)) for _ in range(len(state_ids))]
 
     for seg_idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
         sid = state_ids[seg_idx]
         seg_len = stop - start
 
-        # Use a sub-RNG seeded from the state id so recurring states share
-        # the same waveform "style" (but not identical due to noise)
-        if recurring_states:
-            seg_rng = np.random.default_rng(state_seeds[sid] + seg_idx)
-        else:
-            seg_rng = rng
+        shape_rng = np.random.default_rng(state_seeds[sid])
+        noise_rng = np.random.default_rng(noise_seeds[seg_idx])
 
-        segment = _generate_segment_by_pattern(pattern, sid, seg_len, n_dims, noise_level, seg_rng)
+        segment = _generate_segment_by_pattern(
+            pattern, sid, seg_len, n_dims, noise_level, shape_rng, noise_rng
+        )
 
         # Stitch segment to previous endpoint to suppress visual discontinuities
         # at the boundary (does not change the state label or boundary index).

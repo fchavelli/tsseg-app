@@ -114,7 +114,7 @@ COMPLEXITY_LABELS = {
 COMPLEXITY_GLOSSARY = {
     "n": "number of points in the time series",
     "d": "number of dimensions (channels)",
-    "l": "sliding window size",
+    "l": "window size",
     "n_cp": "number of change points",
     "n_s": "number of distinct states",
 }
@@ -122,6 +122,36 @@ COMPLEXITY_GLOSSARY = {
 COMPLEXITY_GLOSSARY_MD = "**Complexity notation:** " + " · ".join(
     f"`{k}` = {v}" for k, v in COMPLEXITY_GLOSSARY.items()
 )
+
+
+def format_complexity_plain(s: str) -> str:
+    """Render a LaTeX-ish complexity string as plain text.
+
+    The complexity strings in :data:`ALGO_ENTRIES` use LaTeX fragments such as
+    ``\\log``, ``n^2`` and ``n_{cp}``. Gradio's Markdown renderer on the
+    Hugging Face Space runtime does not consistently process ``$...$`` math,
+    so we convert these strings into a readable Unicode form (e.g.
+    ``O(dn log l)``, ``O(n_cp dn²)``) instead of relying on KaTeX.
+    """
+    import re
+
+    if not s:
+        return s
+    out = s
+    out = out.replace("\\log", " log").replace("\\cdot", "·").replace("\\,", " ")
+    out = (
+        out.replace("n^2", "n²")
+        .replace("n^3", "n³")
+        .replace("d^2", "d²")
+        .replace("d^3", "d³")
+        .replace("n_s^2", "n_s²")
+        .replace("n_{cp}^2", "n_cp²")
+    )
+    # Subscripts: n_{cp} -> n_cp
+    out = re.sub(r"_\{([^}]+)\}", r"_\1", out)
+    # Strip any leftover backslashes
+    out = out.replace("\\", "")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +233,8 @@ DATASET_ENTRIES: Sequence[DatasetEntry] = (
     DatasetEntry(
         "Synthetic",
         "Generated",
-        "Configurable generator with 6 intra-segment patterns "
-        "(constant, sinusoidal, step, stairs, linear, mixed), noise control, recurring states",
+        "Configurable generator with 7 intra-segment patterns "
+        "(Gaussian processes, sinusoidal, constant, step, stairs, linear, mixed), noise control, recurring states",
         "1–8",
         "2–12",
         "tsseg",
@@ -221,7 +251,9 @@ def build_algo_table(runtime_detectors: dict | None = None) -> str:
     """Return a Markdown table of algorithms (no group separator rows)."""
     rows: list[str] = []
     for a in ALGO_ENTRIES:
-        rows.append(f"| {a.name} | {a.task} | {a.family} | ${a.complexity}$ | {a.license} | {a.source} |")
+        rows.append(
+            f"| {a.name} | {a.task} | {a.family} | `{format_complexity_plain(a.complexity)}` | {a.license} | {a.source} |"
+        )
 
     header = (
         "| Algorithm | Task | Family | Complexity | License | Source |\n"
