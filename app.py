@@ -30,7 +30,12 @@ from src.data import (
     load_mocap_dataset,
 )
 from src.metrics import compute_metrics, get_metrics_for_task
-from src.params import build_data_context, get_param_info, validate_params_for_detector
+from src.params import (
+    apply_sentinel_translations,
+    build_data_context,
+    get_param_info,
+    validate_params_for_detector,
+)
 from src.plotting import (
     build_segment_color_map,
     make_annotation_figure,
@@ -725,6 +730,10 @@ The project bundles together:
                                         except (ValueError, TypeError):
                                             pass
                                     params[p["name"]] = val
+
+                                # Translate UI sentinels (e.g. 0 = auto/learn)
+                                # back to the upstream default values.
+                                params = apply_sentinel_translations(info.cls.__name__, params)
 
                                 # --- Validate & auto-adjust params via schema ---
                                 params, v_warnings, v_errors = validate_params_for_detector(

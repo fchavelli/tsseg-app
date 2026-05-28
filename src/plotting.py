@@ -229,7 +229,11 @@ def make_comparison_figure(
         for shape in pred_fig.layout.shapes or []:
             fig.add_shape(shape, row=pred_row, col=1)
     else:
+        # No predicted change points and no fallback states: render the signal
+        # as a single neutral segment so the dimensions don't get distinct
+        # state-like colors (which would falsely imply "1 state per channel").
         n_dims = signal.shape[1]
+        neutral_cmap = build_cpd_color_map(1, n_dims)
         for dim in range(n_dims):
             fig.add_trace(
                 go.Scatter(
@@ -237,6 +241,7 @@ def make_comparison_figure(
                     y=signal[:, dim],
                     mode="lines",
                     name=f"Dim {dim}",
+                    line=dict(color=neutral_cmap[0][dim], width=2),
                     showlegend=False,
                 ),
                 row=pred_row,
@@ -326,12 +331,18 @@ def make_multi_comparison_figure(
             for shape in run_fig.layout.shapes or []:
                 fig.add_shape(shape, row=row, col=1)
         else:
-            for dim in range(signal.shape[1]):
+            # No predicted change points: render the signal as a single
+            # neutral segment to avoid implying that each dimension is a
+            # distinct state.
+            n_dims = signal.shape[1]
+            neutral_cmap = build_cpd_color_map(1, n_dims)
+            for dim in range(n_dims):
                 fig.add_trace(
                     go.Scatter(
                         x=np.arange(signal.shape[0]),
                         y=signal[:, dim],
                         mode="lines",
+                        line=dict(color=neutral_cmap[0][dim], width=2),
                         showlegend=False,
                     ),
                     row=row,

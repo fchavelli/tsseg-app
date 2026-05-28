@@ -167,8 +167,10 @@ def get_param_info(
         ``nullable``, ``hidden``, ``adjusted``, ``adjust_reason``.
     """
     if _has_parameter_schema(cls):
-        return _param_info_from_schema(cls, data_ctx)
-    return _param_info_legacy(cls)
+        result = _param_info_from_schema(cls, data_ctx)
+    else:
+        result = _param_info_legacy(cls)
+    return apply_param_overrides(cls.__name__, result)
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +297,91 @@ def _fallback_upper_f(default: Any, lo: float) -> float:
         except (TypeError, ValueError):
             pass
     return lo + 10.0
+
+
+# ---------------------------------------------------------------------------
+# Per-detector parameter overrides
+# ---------------------------------------------------------------------------
+
+# Some upstream detectors accept a *sentinel* string (e.g. ``"learn"``) on
+# parameters that would otherwise be integers. The introspection-based UI
+# would render them as plain text boxes, which is both unfriendly and
+# error-prone (typing ``"5"`` keeps the value as a string and breaks the call).
+#
+# This map injects friendlier widgets for those parameters; the demo then
+# translates the sentinel value (``0``) back to the upstream string in
+# :func:`apply_sentinel_translations` before instantiating the detector.
+
+_PARAM_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "ClaspDetector": {
+        "n_segments": {
+            "type": "int",
+            "default": 0,
+            "min": 0,
+            "max": 50,
+            "step": 1,
+            "description": "Number of segments to detect. 0 = auto (learn from data).",
+        },
+    },
+    "ClapDetector": {
+        "n_segments": {
+            "type": "int",
+            "default": 0,
+            "min": 0,
+            "max": 50,
+            "step": 1,
+            "description": "Number of segments to detect. 0 = auto (learn from data).",
+        },
+        "n_change_points": {
+            "type": "int",
+            "default": 0,
+            "min": 0,
+            "max": 50,
+            "step": 1,
+            "description": "Number of change points (overrides n_segments). 0 = auto.",
+        },
+    },
+}
+
+# Sentinel value used in the UI to mean "fall back to the upstream auto mode".
+_AUTO_SENTINEL = 0
+_AUTO_REPLACEMENT: Dict[str, Dict[str, Any]] = {
+    "ClaspDetector": {"n_segments": "learn"},
+    "ClapDetector": {"n_segments": None, "n_change_points": None},
+}
+
+
+def apply_param_overrides(detector_name: str, params: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Replace the UI hint of selected params with a friendlier widget."""
+    overrides = _PARAM_OVERRIDES.get(detector_name)
+    if not overrides:
+        return params
+    out: List[Dict[str, Any]] = []
+    for p in params:
+        if p["name"] in overrides:
+            merged = dict(p)
+            merged.update(overrides[p["name"]])
+            # Reset adjustment flags since we replaced the spec entirely
+            merged.setdefault("group", "")
+            merged.setdefault("nullable", False)
+            merged.setdefault("adjusted", False)
+            merged.setdefault("adjust_reason", "")
+            out.append(merged)
+        else:
+            out.append(p)
+    return out
+
+
+def apply_sentinel_translations(detector_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate UI sentinel values (``0`` = auto) back to upstream defaults."""
+    rules = _AUTO_REPLACEMENT.get(detector_name)
+    if not rules:
+        return params
+    out = dict(params)
+    for pname, replacement in rules.items():
+        if pname in out and out[pname] == _AUTO_SENTINEL:
+            out[pname] = replacement
+    return out
 
 
 # ---------------------------------------------------------------------------
