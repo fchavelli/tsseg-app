@@ -251,9 +251,8 @@ def build_algo_table(runtime_detectors: dict | None = None) -> str:
     """Return a Markdown table of algorithms (no group separator rows)."""
     rows: list[str] = []
     for a in ALGO_ENTRIES:
-        rows.append(
-            f"| {a.name} | {a.task} | {a.family} | `{format_complexity_plain(a.complexity)}` | {a.license} | {a.source} |"
-        )
+        complexity = format_complexity_plain(a.complexity)
+        rows.append(f"| {a.name} | {a.task} | {a.family} | `{complexity}` | {a.license} | {a.source} |")
 
     header = (
         "| Algorithm | Task | Family | Complexity | License | Source |\n"

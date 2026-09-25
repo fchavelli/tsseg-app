@@ -289,9 +289,7 @@ def _generate_segment_by_pattern(
         # Pick a sub-pattern deterministically from shape_rng so two segments
         # of the same recurring state pick the SAME sub-pattern.
         choice = shape_rng.choice(["constant", "sinusoidal", "step", "stairs", "linear", "gp"])
-        return _generate_segment_by_pattern(
-            choice, state_idx, length, n_dims, noise_level, shape_rng, noise_rng
-        )
+        return _generate_segment_by_pattern(choice, state_idx, length, n_dims, noise_level, shape_rng, noise_rng)
     else:
         # Fallback to constant
         return _gen_constant(length, n_dims, float(state_idx), noise_level, noise_rng)
@@ -375,9 +373,7 @@ def generate_synthetic_series(
         shape_rng = np.random.default_rng(state_seeds[sid])
         noise_rng = np.random.default_rng(noise_seeds[seg_idx])
 
-        segment = _generate_segment_by_pattern(
-            pattern, sid, seg_len, n_dims, noise_level, shape_rng, noise_rng
-        )
+        segment = _generate_segment_by_pattern(pattern, sid, seg_len, n_dims, noise_level, shape_rng, noise_rng)
 
         # Stitch segment to previous endpoint to suppress visual discontinuities
         # at the boundary (does not change the state label or boundary index).
