@@ -53,7 +53,7 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("TSCP2", "CPD", "Subsequence-based", "O(dn)", "—", "cruiseresearchgroup"),
     # ── SD · Integrated ───────────────────────────────────────────────────
     AlgoEntry("AutoPlait", "SD", "Integrated", "O(dn)", "—", "—"),
-    AlgoEntry("HdpHsmm", "SD", "Integrated", "O(n_s^2 n + d^2 n)", "—", "zhd96"),
+    AlgoEntry("HdpHsmm", "SD", "Integrated", "O(dn + n_s \\min(n, 2000)^2)", "—", "mattjj/pyhsmm (reimpl.)"),
     AlgoEntry("Hidalgo", "SD", "Integrated", "O(dn^2)", "BSD-3", "aeon"),
     AlgoEntry("HMM", "SD", "Integrated", "-", "BSD-3", "hmmlearn"),
     # ── SD · Decomposed ───────────────────────────────────────────────────
