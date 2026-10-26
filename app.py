@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 import time
 import traceback
 from typing import Any, Dict
@@ -29,7 +30,7 @@ from src.data import (
     load_csv,
     load_mocap_dataset,
 )
-from src.metrics import compute_metrics, get_metrics_for_task
+from src.metrics import compute_metrics, get_metrics_for_task, summarize_sms_errors
 from src.params import (
     apply_sentinel_translations,
     build_data_context,
@@ -43,6 +44,7 @@ from src.plotting import (
     make_metrics_bar_chart,
     make_multi_comparison_figure,
     make_signal_figure,
+    make_sms_breakdown_chart,
 )
 from src.utils import (
     align_states_via_hungarian,
@@ -97,8 +99,8 @@ def _format_params(params: dict) -> str:
     return text
 
 
-def _get_detector_choices(task_label: str) -> list[str]:
-    """Get sorted list of detector names for a given task label.
+def _get_detector_choices(task_label: str) -> list[tuple[str, str]]:
+    """Get display labels and stable detector names for the task menu.
 
     For Change Point Detection, also include State Detection algorithms
     (they infer change points from detected states).
@@ -109,7 +111,15 @@ def _get_detector_choices(task_label: str) -> list[str]:
     if task == "change_point_detection":
         state_detectors = get_detectors_by_type("state_detection")
         detectors.update(state_detectors)
-    return sorted(detectors.keys())
+    choices = []
+    for name, info in sorted(detectors.items()):
+        label = (
+            f"{name} · SD (change points inferred)"
+            if task == "change_point_detection" and info.detector_type == "state_detection"
+            else name
+        )
+        choices.append((label, name))
+    return choices
 
 
 def _get_all_detector_choices() -> dict[str, DetectorInfo]:
@@ -159,6 +169,7 @@ APP_CSS = """
 .run-btn { min-height: 40px !important; font-weight: 500 !important; }
 .param-section { max-height: 55vh; overflow-y: auto; padding-right: 4px; }
 footer { display: none !important; }
+.complexity-help { cursor: help; color: #52679a; margin-left: 2px; font-size: 0.72em; }
 """
 
 APP_THEME = gr.themes.Base(
@@ -316,7 +327,23 @@ The project bundles together:
                                 info="Minimum number of timestamps per segment",
                             )
                             synth_noise = gr.Slider(0.0, 2.0, value=0.5, step=0.05, label="Noise level")
+                            synth_continuous = gr.Checkbox(
+                                value=False,
+                                label="Match levels at boundaries",
+                                info="Removes jumps, but can hide state changes and distort recurring states",
+                            )
                             synth_seed = gr.Number(value=42, label="Random seed", precision=0)
+
+                            def update_min_segment_limit(length, segments, current):
+                                maximum = min(200, max(5, int(length) // int(segments)))
+                                return gr.update(maximum=maximum, value=min(int(current), maximum))
+
+                            for control in (synth_length, synth_segments):
+                                control.change(
+                                    update_min_segment_limit,
+                                    inputs=[synth_length, synth_segments, synth_min_seg],
+                                    outputs=[synth_min_seg],
+                                )
 
                         # -- MoCap controls --
                         with gr.Group(visible=True) as mocap_controls:
@@ -375,6 +402,7 @@ The project bundles together:
                     recurring,
                     min_seg,
                     noise,
+                    continuous,
                     seed,
                     trial,
                     file,
@@ -392,6 +420,7 @@ The project bundles together:
                                 noise_level=noise,
                                 recurring_states=recurring,
                                 min_segment_length=int(min_seg),
+                                continuous=continuous,
                                 random_state=int(seed) if seed is not None else None,
                             )
                         elif source == "Sample dataset":
@@ -449,6 +478,7 @@ The project bundles together:
                         synth_recurring,
                         synth_min_seg,
                         synth_noise,
+                        synth_continuous,
                         synth_seed,
                         mocap_trial,
                         csv_file,
@@ -509,7 +539,7 @@ The project bundles together:
                         # Update detector list when task changes
                         def update_detectors(task_label):
                             choices = _get_detector_choices(task_label)
-                            return gr.update(choices=choices, value=choices[0] if choices else None)
+                            return gr.update(choices=choices, value=choices[0][1] if choices else None)
 
                         task_selector.change(update_detectors, inputs=[task_selector], outputs=[detector_dropdown])
 
@@ -524,29 +554,24 @@ The project bundles together:
 
                             task_type = "State Detection" if info.detector_type == "state_detection" else "CPD"
 
-                            # --- Header: name · task · family · complexity badge ---
+                            # --- Detector metadata and mathematical complexity ---
                             from src.about_data import (
-                                COMPLEXITY_COLORS,
-                                COMPLEXITY_GLOSSARY_MD,
-                                COMPLEXITY_LABELS,
-                                format_complexity_plain,
+                                COMPLEXITY_TOOLTIP,
+                                LATEX_DELIMITERS,
+                                TAXONOMY,
                             )
 
                             complexity_html = ""
-                            if info.complexity:
-                                tier = info.complexity_tier or "linear"
-                                color = COMPLEXITY_COLORS.get(tier, "#555")
-                                tier_label = COMPLEXITY_LABELS.get(tier, tier)
-                                complexity_text = format_complexity_plain(info.complexity)
+                            if info.complexity and info.complexity not in ("-", "—"):
                                 complexity_html = (
-                                    f' · <span title="Time complexity ({tier_label})" '
-                                    f'style="color:{color};font-weight:500;font-family:ui-monospace,monospace;">'
-                                    f"{complexity_text}</span>"
+                                    f" · ${info.complexity}$"
+                                    f'<sup class="complexity-help" title="{COMPLEXITY_TOOLTIP}">?</sup>'
                                 )
-                            gr.Markdown(f"**{detector_name}** · {task_type} · {info.category}{complexity_html}")
-                            if info.complexity:
-                                with gr.Accordion("Complexity notation (n, d, l, n_cp, n_s)", open=False):
-                                    gr.Markdown(COMPLEXITY_GLOSSARY_MD)
+                            search, compared = TAXONOMY.get(detector_name, ("Other", "—"))
+                            gr.Markdown(
+                                f"**{detector_name}** · {task_type} · {search} / {compared}{complexity_html}",
+                                latex_delimiters=LATEX_DELIMITERS,
+                            )
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)
 
@@ -791,7 +816,8 @@ The project bundles together:
                                         "params": {k: str(v) for k, v in params.items()},
                                         "pred_states": pred_states.tolist() if pred_states is not None else None,
                                         "pred_cps": pred_cps if pred_cps else [],
-                                        "task": ui_task,
+                                        "task": info.detector_type,
+                                        "requested_task": ui_task,
                                     }
                                     return result_md, fig, last_run
 
@@ -966,39 +992,57 @@ The project bundles together:
 
                         evaluate_btn = gr.Button("Evaluate All Runs", variant="primary", elem_classes="run-btn")
 
-                        def toggle_eval_metrics(task_label):
+                        def toggle_eval_metrics(task_label, selected_state_metrics):
                             is_cpd = task_label == "Change Point Detection"
                             return (
                                 gr.update(visible=is_cpd),
                                 gr.update(visible=not is_cpd),
                                 gr.update(visible=is_cpd),
+                                gr.update(visible=not is_cpd and "State Matching Score" in selected_state_metrics),
                             )
-
-                        eval_task.change(
-                            toggle_eval_metrics,
-                            inputs=[eval_task],
-                            outputs=[cpd_metrics_cb, state_metrics_cb, f1_margin],
-                        )
 
                     with gr.Column(scale=3):
                         eval_results_md = gr.Markdown("")
                         eval_table = gr.Dataframe(label="Evaluation results", interactive=False)
                         eval_chart = gr.Plot(label="Scores comparison")
+                        with gr.Group(visible=False) as sms_group:
+                            gr.Markdown(
+                                "**SMS error decomposition** — delay: boundary offset; transition: one true boundary "
+                                "covered; isolation: isolated wrong state; missing: several true boundaries covered. "
+                                "The four SMS loss contributions add up to `1 − SMS`."
+                            )
+                            eval_sms_table = gr.Dataframe(label="SMS error decomposition", interactive=False)
+                            eval_sms_chart = gr.Plot(label="SMS loss by error type")
                         with gr.Row():
                             export_csv_btn = gr.Button("Export CSV", variant="secondary")
                             export_file = gr.File(label="Download", visible=False)
 
+                eval_task.change(
+                    toggle_eval_metrics,
+                    inputs=[eval_task, state_metrics_cb],
+                    outputs=[cpd_metrics_cb, state_metrics_cb, f1_margin, sms_group],
+                )
+                state_metrics_cb.change(
+                    lambda selected, task: gr.update(
+                        visible=task == "State Detection" and "State Matching Score" in selected
+                    ),
+                    inputs=[state_metrics_cb, eval_task],
+                    outputs=[sms_group],
+                )
+
                 def evaluate_runs(ts_data, runs, task_label, cpd_metrics, state_metrics, margin):
                     if ts_data is None:
-                        return "Load data first.", None, None
+                        return "Load data first.", None, None, None, None
                     if not ts_data.has_ground_truth:
                         return (
                             "No ground truth available. Upload data with labels or use a built-in dataset.",
                             None,
                             None,
+                            None,
+                            None,
                         )
                     if not runs:
-                        return "No runs to evaluate. Add runs from the Segmentation tab.", None, None
+                        return "No runs to evaluate. Add runs from the Segmentation tab.", None, None, None, None
 
                     task = TASK_LABELS[task_label]
                     selected = cpd_metrics if task == "change_point_detection" else state_metrics
@@ -1008,14 +1052,14 @@ The project bundles together:
                         metric_params["F1 Score"] = {"margin": int(margin)}
 
                     all_results = []
+                    sms_rows = []
                     skipped = []
                     for i, run in enumerate(runs):
-                        run_task = run.get("task", "change_point_detection")
                         pred_cps = run.get("pred_cps", [])
                         pred_states = np.array(run["pred_states"]) if run.get("pred_states") else None
 
                         # Block incompatible task/metric combinations
-                        if task == "state_detection" and run_task == "change_point_detection":
+                        if task == "state_detection" and pred_states is None:
                             # CPD-only algo cannot be evaluated with SD metrics
                             skipped.append(
                                 f"{i + 1}. {run['name']} (CPD-only — incompatible with State Detection metrics)"
@@ -1053,9 +1097,19 @@ The project bundles together:
 
                         scores["Algorithm"] = f"{i + 1}. {run['name']}"
                         all_results.append(scores)
+                        if (
+                            task == "state_detection"
+                            and "State Matching Score" in selected
+                            and isinstance(scores.get("State Matching Score"), (int, float))
+                        ):
+                            try:
+                                for row in summarize_sms_errors(ts_data.ground_truth, y_pred):
+                                    sms_rows.append({"Algorithm": scores["Algorithm"], **row})
+                            except (ValueError, TypeError, IndexError) as exc:
+                                logger.warning("Could not decompose SMS for %s: %s", run["name"], exc)
 
                     if not all_results:
-                        return "No valid results.", None, None
+                        return "No valid results.", None, None, None, None
 
                     df = pd.DataFrame(all_results)
                     cols = ["Algorithm"] + [c for c in df.columns if c != "Algorithm"]
@@ -1066,21 +1120,23 @@ The project bundles together:
                     if skipped:
                         info += f"\n\nSkipped (no valid predictions): {', '.join(skipped)}"
 
-                    return info, df, chart
+                    sms_df = pd.DataFrame(sms_rows) if sms_rows else None
+                    sms_chart = make_sms_breakdown_chart(sms_df) if sms_df is not None else None
+                    return info, df, chart, sms_df, sms_chart
 
                 evaluate_btn.click(
                     evaluate_runs,
                     inputs=[data_state, runs_state, eval_task, cpd_metrics_cb, state_metrics_cb, f1_margin],
-                    outputs=[eval_results_md, eval_table, eval_chart],
+                    outputs=[eval_results_md, eval_table, eval_chart, eval_sms_table, eval_sms_chart],
                 )
 
                 def export_results(ts_data, runs, task_label, cpd_metrics, state_metrics, margin):
-                    _, df, _ = evaluate_runs(ts_data, runs, task_label, cpd_metrics, state_metrics, margin)
+                    _, df, _, _, _ = evaluate_runs(ts_data, runs, task_label, cpd_metrics, state_metrics, margin)
                     if df is None:
                         return gr.update(visible=False)
-                    path = "/tmp/tsseg_evaluation_results.csv"
-                    df.to_csv(path, index=False)
-                    return gr.update(value=path, visible=True)
+                    with tempfile.NamedTemporaryFile(prefix="tsseg_scores_", suffix=".csv", delete=False) as export:
+                        df.to_csv(export.name, index=False)
+                    return gr.update(value=export.name, visible=True)
 
                 export_csv_btn.click(
                     export_results,
@@ -1102,6 +1158,7 @@ The project bundles together:
             with gr.Tab("About", id="tab_about"):
                 from src.about_data import (
                     DISCLAIMER_MD,
+                    LATEX_DELIMITERS,
                     LINKS_MD,
                     MOCAP_NOTE_MD,
                     build_algo_table,
@@ -1113,7 +1170,8 @@ The project bundles together:
                 metric_table = build_metric_table()
                 dataset_table = build_dataset_table()
 
-                gr.Markdown(f"""
+                gr.Markdown(
+                    f"""
 #### About tsseg-app
 
 **tsseg** is a Python library for **Time Series Segmentation**, covering both
@@ -1122,8 +1180,10 @@ This app exposes {len(all_detectors)} algorithms through an interactive interfac
 State detection algorithms are also available under the CPD task, since change points
 can be inferred from detected states.
 
-The *Complexity* column reports asymptotic time complexity using the variables
-defined in the parameters panel (n, d, l, n_cp, n_s).
+The taxonomy describes **how** a segmentation is found (search strategy) and
+**what** the method compares. CPD methods assign each segment a new label;
+SD methods can recognise states that recur. Hover over **?** beside a complexity
+to see its notation. Complexity depends on parameters and implementation.
 
 ---
 
@@ -1152,7 +1212,9 @@ defined in the parameters panel (n, d, l, n_cp, n_s).
 #### Links
 
 {LINKS_MD}
-                """)
+                """,
+                    latex_delimiters=LATEX_DELIMITERS,
+                )
 
     return app
 

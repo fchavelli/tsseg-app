@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 
 class TestData:
@@ -31,6 +32,38 @@ class TestData:
         # Fewer distinct states than segments
         assert ts.n_states < 5
 
+    def test_synthetic_boundaries_and_recurring_shapes(self):
+        from src.data import generate_synthetic_series
+
+        ts = generate_synthetic_series(
+            length=500,
+            n_segments=5,
+            n_dims=3,
+            pattern="constant",
+            noise_level=0,
+            recurring_states=True,
+            min_segment_length=80,
+            random_state=3,
+        )
+        bounds = [0, *ts.change_points, ts.length]
+        assert min(np.diff(bounds)) >= 80
+        segments = [ts.signal[a:b] for a, b in zip(bounds[:-1], bounds[1:])]
+        labels = [int(ts.ground_truth[a]) for a in bounds[:-1]]
+        for i, label in enumerate(labels):
+            for j in range(i + 1, len(labels)):
+                if labels[j] == label:
+                    assert np.allclose(segments[i][0], segments[j][0])
+        assert not np.allclose(segments[0][0, 0], segments[0][0, 1])
+
+    def test_synthetic_rejects_impossible_minimum_and_gp_scales(self):
+        from src.data import generate_synthetic_series
+
+        with pytest.raises(ValueError, match="minimum segment length"):
+            generate_synthetic_series(length=200, n_segments=12, min_segment_length=20)
+        ts = generate_synthetic_series(length=5000, n_segments=2, pattern="gp", random_state=2)
+        assert ts.signal.shape == (5000, 2)
+        assert np.isfinite(ts.signal).all()
+
     def test_mocap_dataset(self):
         from src.data import load_mocap_dataset
 
@@ -50,14 +83,28 @@ class TestAlgorithms:
             assert info.detector_type in ("change_point_detection", "state_detection")
 
     def test_catalogue_tracks_runtime_detectors(self):
-        from src.about_data import build_algo_table
+        from src.about_data import TAXONOMY, build_algo_table
         from src.algorithms import get_all_detectors
 
         detectors = get_all_detectors()
         assert {"AutoPlait", "ChangeFinder", "ChangeForest", "GaussianHMM", "RuLSIF", "SeededBinSeg"} <= set(detectors)
         assert "Patss" not in detectors
+        assert set(detectors) <= set(TAXONOMY)
         rows = build_algo_table(detectors).splitlines()[2:]
-        assert {row.split("|")[1].strip() for row in rows} == set(detectors)
+        assert {row.split("|")[1].strip().split("](")[0][1:] for row in rows} == set(detectors)
+        assert all("https://" in row for row in rows)
+        assert any("$O(" in row for row in rows)
+        assert "complexity-help" in build_algo_table(detectors).splitlines()[0]
+
+    def test_task_menu_marks_state_detectors_in_cpd(self):
+        from app import _get_detector_choices
+
+        cpd = dict(_get_detector_choices("Change Point Detection"))
+        sd = dict(_get_detector_choices("State Detection"))
+        assert "GaussianHMM · SD (change points inferred)" in cpd
+        assert cpd["GaussianHMM · SD (change points inferred)"] == "GaussianHMM"
+        assert "GaussianHMM" in sd
+        assert "Pelt" in cpd and "Pelt" not in sd
 
     def test_source_discovery_includes_lazy_exports(self):
         import importlib.util
@@ -217,6 +264,39 @@ class TestParams:
 
 
 class TestMetrics:
+    def test_sms_error_decomposition_matches_score(self):
+        from tsseg.metrics import StateMatchingScore
+
+        from src.metrics import summarize_sms_errors
+
+        truth = np.array([0] * 5 + [1] * 5 + [2] * 5)
+        pred = np.array([0] * 6 + [1] * 4 + [2] * 5)
+        rows = summarize_sms_errors(truth, pred)
+        score = StateMatchingScore().compute(truth, pred)["score"]
+        assert {row["Error type"] for row in rows} == {"Delay", "Transition", "Isolation", "Missing"}
+        assert sum(row["Points"] for row in rows) > 0
+        assert abs(sum(row["SMS loss"] for row in rows) - (1 - score)) < 0.0003
+
+    def test_sd_run_from_cpd_menu_can_be_evaluated_as_sd(self):
+        from app import create_app
+        from src.data import TimeSeriesData
+
+        ui = create_app()
+        evaluate = next(item.fn for item in ui.fns.values() if item.fn and item.fn.__name__ == "evaluate_runs")
+        truth = np.array([0] * 50 + [1] * 50)
+        data = TimeSeriesData(signal=np.ones((100, 2)), ground_truth=truth)
+        # Older sessions recorded the selected CPD task even for an SD detector.
+        run = {
+            "name": "GaussianHMM",
+            "task": "change_point_detection",
+            "pred_states": [0] * 55 + [1] * 45,
+            "pred_cps": [55],
+        }
+        _, scores, _, breakdown, chart = evaluate(data, [run], "State Detection", [], ["State Matching Score"], 5)
+        assert scores["State Matching Score"].iloc[0] < 1
+        assert breakdown["Points"].sum() == 5
+        assert chart is not None
+
     def test_compute_cpd_metrics(self):
         from src.metrics import compute_metrics
 

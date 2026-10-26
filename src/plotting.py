@@ -415,3 +415,22 @@ def make_metrics_bar_chart(scores_df) -> go.Figure:
         margin=dict(t=50, b=40, l=50, r=20),
     )
     return fig
+
+
+def make_sms_breakdown_chart(breakdown_df) -> go.Figure:
+    """Stack the contributions of each SMS error type to the total score loss."""
+    colors = {"Delay": "#4a90e2", "Transition": "#e6a23c", "Isolation": "#d9534f", "Missing": "#9467bd"}
+    fig = go.Figure()
+    for error_type, color in colors.items():
+        subset = breakdown_df[breakdown_df["Error type"] == error_type]
+        fig.add_bar(x=subset["Algorithm"], y=subset["SMS loss"], name=error_type, marker_color=color)
+    fig.update_layout(
+        barmode="stack",
+        title="SMS score loss by error type (sum = 1 − SMS)",
+        xaxis_title="Algorithm",
+        yaxis_title="Contribution to score loss",
+        template="plotly_white",
+        height=360,
+        margin=dict(t=50, b=45, l=55, r=20),
+    )
+    return fig

@@ -32,7 +32,6 @@ class DetectorInfo:
     description: str = ""
     category: str = ""
     complexity: str = ""  # Big-O complexity string (math, no $)
-    complexity_tier: str = ""  # linear / log_linear / quadratic / cubic
 
     @property
     def dependencies(self) -> list[str]:
@@ -203,7 +202,7 @@ def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
 
 def get_all_detectors() -> Dict[str, DetectorInfo]:
     """Return all detectors with metadata (excluding broken/unavailable ones)."""
-    from .about_data import classify_complexity, get_algo_entry
+    from .about_data import get_complexity
 
     results: Dict[str, DetectorInfo] = {}
     for name, cls in _iter_exported_detectors():
@@ -213,8 +212,7 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
         tags = getattr(cls, "_tags", {}) or {}
         detector_type = tags.get("detector_type", "unknown")
         short_name = _strip_detector_suffix(name)
-        entry = get_algo_entry(short_name)
-        complexity = entry.complexity if entry else ""
+        complexity = get_complexity(short_name)
         info = DetectorInfo(
             name=short_name,
             cls=cls,
@@ -222,7 +220,6 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
             tags=tags,
             category=_infer_category(name),
             complexity=complexity,
-            complexity_tier=classify_complexity(complexity) if complexity else "",
         )
         results[short_name] = info
     return results

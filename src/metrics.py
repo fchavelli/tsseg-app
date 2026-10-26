@@ -87,6 +87,34 @@ STATE_METRICS = {
     },
 }
 
+SMS_ERROR_TYPES = ("delay", "transition", "isolation", "missing")
+
+
+def summarize_sms_errors(y_true: np.ndarray, y_pred: np.ndarray) -> list[dict[str, float | int | str]]:
+    """Decompose SMS loss by the four error types reported by tsseg.
+
+    Each type contributes its mismatched time points and its weighted penalty
+    to ``1 - SMS``. The percentages use the full series as denominator.
+    """
+    output = StateMatchingScore().compute(y_true, y_pred, return_errors=True)
+    n = len(y_true)
+    rows = []
+    for error_type in SMS_ERROR_TYPES:
+        blocks = [block for block in output["errors"] if block["type"] == error_type]
+        points = sum(int(block["size"]) for block in blocks)
+        penalty = sum(float(block["penalty"]) for block in blocks)
+        rows.append(
+            {
+                "Error type": error_type.title(),
+                "Blocks": len(blocks),
+                "Points": points,
+                "Time (%)": round(100 * points / n, 2) if n else 0.0,
+                "Penalty / n": round(penalty / n, 4) if n else 0.0,
+                "SMS loss": round((points + penalty) / n, 4) if n else 0.0,
+            }
+        )
+    return rows
+
 
 def get_metrics_for_task(task: str) -> dict:
     """Return metric registry for the given task type."""

@@ -72,32 +72,13 @@ def _generate_boundaries(
 ) -> list[int]:
     if n_segments < 1:
         raise ValueError("n_segments must be >= 1")
-    if length <= n_segments:
-        raise ValueError("length must exceed number of segments")
+    if min_segment_length < 1:
+        raise ValueError("min_segment_length must be >= 1")
     if min_segment_length * n_segments > length:
-        min_segment_length = max(1, length // n_segments)
+        raise ValueError("length must be at least segments × minimum segment length")
     proportions = rng.dirichlet(alpha=np.ones(n_segments))
-    segment_lengths = np.maximum(min_segment_length, (proportions * length).astype(int))
-    # Redistribute excess/deficit so that no segment becomes negative
-    delta = length - int(segment_lengths.sum())
-    if delta > 0:
-        # Distribute extra samples round-robin
-        for i in range(delta):
-            segment_lengths[i % n_segments] += 1
-    elif delta < 0:
-        # Remove excess samples from the largest segments first
-        for _ in range(-delta):
-            idx = int(np.argmax(segment_lengths))
-            if segment_lengths[idx] <= min_segment_length:
-                # All segments are at minimum; shrink the largest anyway
-                idx = int(np.argmax(segment_lengths))
-            segment_lengths[idx] -= 1
-    boundaries: list[int] = []
-    cursor = 0
-    for seg_len in segment_lengths[:-1]:
-        cursor += int(seg_len)
-        boundaries.append(min(cursor, length - 1))
-    return [cp for cp in boundaries if cp < length]
+    segment_lengths = min_segment_length + rng.multinomial(length - min_segment_length * n_segments, proportions)
+    return np.cumsum(segment_lengths)[:-1].astype(int).tolist()
 
 
 def _sine_segment(start, stop, n_dims, mean_offset, amplitude, freq, phase, noise_level, rng):
@@ -194,15 +175,13 @@ def _rbf_kernel(t: np.ndarray, lengthscale: float, variance: float = 1.0) -> np.
 
 
 def _sample_gp(length: int, n_dims: int, lengthscale: float, variance: float, rng: np.random.Generator) -> np.ndarray:
-    """Sample ``n_dims`` independent GP draws on a unit-interval grid of length ``length``.
-
-    Uses a low-rank Cholesky with a tiny jitter for numerical stability.
-    """
+    """Sample on at most 128 knots and interpolate, keeping large series responsive."""
     if length <= 1:
         return rng.normal(size=(length, n_dims))
-    t = np.linspace(0.0, 1.0, length)
+    n_knots = min(length, 128)
+    t = np.linspace(0.0, 1.0, n_knots)
     K = _rbf_kernel(t, lengthscale=lengthscale, variance=variance)
-    K = K + 1e-6 * np.eye(length)
+    K = K + 1e-6 * np.eye(n_knots)
     try:
         L = np.linalg.cholesky(K)
     except np.linalg.LinAlgError:
@@ -210,8 +189,12 @@ def _sample_gp(length: int, n_dims: int, lengthscale: float, variance: float, rn
         w, V = np.linalg.eigh(K)
         w = np.clip(w, 1e-10, None)
         L = V * np.sqrt(w)
-    z = rng.normal(size=(length, n_dims))
-    return L @ z
+    z = rng.normal(size=(n_knots, n_dims))
+    knots = L @ z
+    if n_knots == length:
+        return knots
+    full_t = np.linspace(0.0, 1.0, length)
+    return np.column_stack([np.interp(full_t, t, knots[:, dim]) for dim in range(n_dims)])
 
 
 def _gen_gp(
@@ -303,7 +286,7 @@ def generate_synthetic_series(
     noise_level: float = 0.5,
     recurring_states: bool = False,
     min_segment_length: int = 20,
-    continuous: bool = True,
+    continuous: bool = False,
     random_state: int | None = None,
 ) -> TimeSeriesData:
     """Generate a synthetic multivariate time series with labelled segments.
@@ -321,8 +304,8 @@ def generate_synthetic_series(
         Minimum length of each segment (default 20).
     continuous : bool
         If True, shift each segment so its first value matches the last value
-        of the previous segment, removing artificial discontinuities at the
-        boundaries (purely cosmetic; does not affect state labels).
+        of the previous segment. This can hide level changes and make recurring
+        states less recognisable, so the default is False.
     """
     if length <= 0:
         raise ValueError("length must be positive")
@@ -365,6 +348,12 @@ def generate_synthetic_series(
     distinct_states = sorted(set(state_ids))
     state_seeds: dict[int, int] = {s: int(rng.integers(0, 2**31)) for s in distinct_states}
     noise_seeds: list[int] = [int(rng.integers(0, 2**31)) for _ in range(len(state_ids))]
+    channel_scales = {}
+    channel_offsets = {}
+    for sid in distinct_states:
+        channel_rng = np.random.default_rng(state_seeds[sid] ^ 0x5EED)
+        channel_scales[sid] = channel_rng.uniform(0.7, 1.3, size=n_dims)
+        channel_offsets[sid] = channel_rng.uniform(-0.6, 0.6, size=n_dims)
 
     for seg_idx, (start, stop) in enumerate(zip(boundaries[:-1], boundaries[1:])):
         sid = state_ids[seg_idx]
@@ -374,6 +363,7 @@ def generate_synthetic_series(
         noise_rng = np.random.default_rng(noise_seeds[seg_idx])
 
         segment = _generate_segment_by_pattern(pattern, sid, seg_len, n_dims, noise_level, shape_rng, noise_rng)
+        segment = segment * channel_scales[sid] + channel_offsets[sid]
 
         # Stitch segment to previous endpoint to suppress visual discontinuities
         # at the boundary (does not change the state label or boundary index).
@@ -386,11 +376,12 @@ def generate_synthetic_series(
         states[start:stop] = sid
 
     recur_label = ", recurring" if recurring_states else ""
+    continuity_label = ", level-matched" if continuous else ""
     return TimeSeriesData(
         signal=signal,
         ground_truth=states,
         change_points=change_points,
-        name=f"Synthetic ({pattern}{recur_label}, {n_segments} seg, {n_dims}D)",
+        name=f"Synthetic ({pattern}{recur_label}{continuity_label}, {n_segments} seg, {n_dims}D)",
     )
 
 

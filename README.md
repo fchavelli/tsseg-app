@@ -25,10 +25,10 @@ An interactive web application for **Time Series Segmentation**, powered by [tss
 
 - **30+ segmentation algorithms** - Change Point Detection & State Detection
 - **Upload your own data** - CSV with optional ground truth labels
-- **Built-in datasets** - MoCap (CMU 86) and synthetic generators
+- **Built-in datasets** - MoCap (CMU 86) and reproducible synthetic series with recurring states
 - **Dynamic parameter tuning** - interactive sliders, dropdowns, and text inputs
 - **Multi-algorithm comparison** - side-by-side visual comparison
-- **Standard metrics** - F1, Covering, ARI, NMI, SMS, and more
+- **Standard metrics** - F1, Covering, ARI, NMI, SMS, and an SMS error-type breakdown
 - **Export results** - download predictions and scores as CSV
 
 ## Quick Start
@@ -80,8 +80,12 @@ tsseg-app/
 | **Data** | Load synthetic, MoCap, or upload CSV data |
 | **Segmentation** | Choose algorithm, tune parameters, run detection |
 | **Comparison** | Compare multiple algorithm runs side by side |
-| **Evaluation** | Compute F1, ARI, SMS, etc. when ground truth is available |
-| **About** | Full list of available algorithms and links |
+| **Evaluation** | Compute F1, ARI, SMS, etc. when ground truth is available; inspect SMS delay, transition, isolation and missing errors |
+| **About** | Runtime algorithm list with search/comparison taxonomy, mathematical complexity and source links |
+
+In the CPD algorithm menu, state detectors are marked **SD (change points inferred)**. Their state labels can still be evaluated with SD metrics after a run.
+
+Synthetic data uses a minimum segment length, distinct channel profiles and a reproducible seed. Level matching at boundaries is optional and off by default because it can hide genuine level changes. Gaussian-process patterns are sampled on a bounded knot grid and interpolated, so the full 10,000-point range stays practical.
 
 ## GPU Algorithms on CPU
 

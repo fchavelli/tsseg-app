@@ -1,9 +1,4 @@
-"""Static data for the About tab — algorithms, metrics, datasets.
-
-Kept separate from app.py for clarity and maintainability.
-Algorithms are ordered: CPD/Distribution-based, CPD/Subsequence-based,
-SD/Integrated, SD/Decomposed.
-"""
+"""Curated metadata for the About tab; the runtime detector registry supplies its rows."""
 
 from __future__ import annotations
 
@@ -33,12 +28,12 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("AMOC", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
     AlgoEntry("BinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "BSD-2", "ruptures"),
     AlgoEntry("BottomUp", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("BOCD", "CPD", "Distribution-based", "O(dn^2)", "Apache-2.0", "hildensia"),
+    AlgoEntry("BOCD", "CPD", "Distribution-based", "O(dn^2)", "MIT", "hildensia"),
     AlgoEntry("ChangeFinder", "CPD", "Distribution-based", "O(dn)", "AGPLv3", "tsseg"),
     AlgoEntry("ChangeForest", "CPD", "Distribution-based", "—", "BSD-3", "changeforest"),
     AlgoEntry("DynP", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
     AlgoEntry("EAgglo", "CPD", "Distribution-based", "O(dn^2)", "BSD-3", "aeon"),
-    AlgoEntry("GreedyGaussian", "CPD", "Distribution-based", "O(n_{cp}^2 d^3 n)", "BSD-3", "aeon"),
+    AlgoEntry("GreedyGaussian", "CPD", "Distribution-based", "O(n_{cp}^2 d^3 n)", "BSD-2", "GGS"),
     AlgoEntry("ICID", "CPD", "Distribution-based", "O(dn)", "GPLv3", "IsolationKernel"),
     AlgoEntry("KCPD", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
     AlgoEntry("Pelt", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
@@ -46,7 +41,7 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("Random", "CPD", "Baseline", "O(n)", "AGPLv3", "tsseg"),
     AlgoEntry("SeededBinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "AGPLv3", "tsseg"),
     AlgoEntry("Window", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("Beast", "CPD", "Distribution-based", "-", "MIT", "Rbeast"),
+    AlgoEntry("Beast", "CPD", "Distribution-based", "-", "GPL-2.0+", "Rbeast"),
     # ── CPD · Subsequence-based ───────────────────────────────────────────
     AlgoEntry("CLaSP", "CPD", "Subsequence-based", "O(n_{cp}\\,dn^2)", "BSD-3", "claspy"),
     AlgoEntry("ESPRESSO", "CPD", "Subsequence-based", "O(dn^2 + n_{cp}\\,n)", "—", "cruiseresearchgroup"),
@@ -72,6 +67,119 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
 # Quick lookup by name (case-insensitive)
 ALGO_BY_NAME: dict[str, AlgoEntry] = {a.name.lower(): a for a in ALGO_ENTRIES}
 
+# Search strategy and comparison axis of the tsseg taxonomy. Keys are the
+# detector names shown in the app; candidates are intentionally omitted.
+TAXONOMY: dict[str, tuple[str, str]] = {
+    "Amoc": ("Optimal DP", "Observation model"),
+    "AutoPlait": ("State sequence DP", "Observation model"),
+    "Beast": ("Bayesian DP", "Observation model"),
+    "BinSeg": ("Binary segmentation", "Selected cost"),
+    "BOCD": ("Bayesian DP", "Observation model"),
+    "BottomUp": ("Bottom-up", "Selected cost"),
+    "ChangeFinder": ("Profile + peaks", "Observation model"),
+    "ChangeForest": ("Binary segmentation", "Model-free distribution"),
+    "Clap": ("Segment, then group", "Subsequence shapes"),
+    "Clasp": ("Binary segmentation", "Subsequence shapes"),
+    "Dynp": ("Optimal DP", "Selected cost"),
+    "E2USD": ("Cluster windows", "Learned representation"),
+    "EAgglo": ("Bottom-up", "Model-free distribution"),
+    "Espresso": ("Profile + peaks", "Subsequence shapes"),
+    "FLUSS": ("Profile + peaks", "Subsequence shapes"),
+    "GaussianHMM": ("State sequence DP", "Observation model"),
+    "GreedyGaussian": ("Binary segmentation", "Observation model"),
+    "HMM": ("State sequence DP", "Observation model"),
+    "HdpHsmm": ("State sequence DP", "Observation model"),
+    "Hidalgo": ("Cluster windows", "Observation model"),
+    "ICID": ("Profile + peaks", "Model-free distribution"),
+    "InformationGain": ("Binary segmentation", "Observation model"),
+    "KCPD": ("Optimal DP", "Model-free distribution"),
+    "Pelt": ("Optimal DP", "Selected cost"),
+    "Prophet": ("Convex relaxation", "Observation model"),
+    "Random": ("Baseline", "—"),
+    "RuLSIF": ("Profile + peaks", "Model-free distribution"),
+    "SeededBinSeg": ("Binary segmentation", "Observation model"),
+    "TGLAD": ("Profile + peaks", "Observation model"),
+    "Ticc": ("State sequence DP", "Observation model"),
+    "Time2State": ("Cluster windows", "Learned representation"),
+    "Tire": ("Profile + peaks", "Learned representation"),
+    "Window": ("Profile + peaks", "Selected cost"),
+}
+
+COMPLEXITY_BY_NAME = {
+    "Beast": r"O(dn)",
+    "BOCD": r"O(dn+n^3)",
+    "BottomUp": r"O(dn\log n)",
+    "ChangeForest": "",  # depends on classifier and segmentation tree
+    "ChangeFinder": r"O(dn)",
+    "Clap": r"O(n_{\mathrm{CP}}n(nd+n_{\mathrm{CP}}\log n_{\mathrm{CP}}))",
+    "Dynp": r"O(n_{\mathrm{CP}}dn^2)",
+    "E2USD": r"O(dn\ell\log\ell)",
+    "Espresso": r"O(dn^2\log n)",
+    "GaussianHMM": r"O(n n_{\mathrm{S}}(n_{\mathrm{S}}+d))",
+    "GreedyGaussian": r"O(n_{\mathrm{CP}}d^3n)",
+    "HMM": r"O(n_{\mathrm{S}}^2n)",
+    "HdpHsmm": r"O(dn+n_{\mathrm{S}}(n_{\mathrm{S}}+d^2))",
+    "ICID": r"O(dn+n^2)",
+    "InformationGain": r"O(n_{\mathrm{CP}}^2dn)",
+    "KCPD": "",  # depends on kernel cost and PELT/DynP search mode
+    "Prophet": r"O(dn)",
+    "RuLSIF": r"O(nb^3)",
+    "SeededBinSeg": r"O(dn\log n)",
+    "Ticc": r"O(n_{\mathrm{S}}(n(d\ell)^2+(d\ell)^3))",
+    "Time2State": r"O(dn\ell)",
+    "Tire": r"O(dn\ell)",
+    "Window": r"O(dn\ell)",
+}
+
+SOURCE_URLS = {
+    "Amoc": "https://github.com/deepcharles/ruptures",
+    "AutoPlait": "https://www.dm.sanken.osaka-u.ac.jp/~yasuko/software.html",
+    "Beast": "https://github.com/zhaokg/Rbeast",
+    "BinSeg": "https://github.com/deepcharles/ruptures",
+    "BOCD": "https://github.com/hildensia/bayesian_changepoint_detection",
+    "BottomUp": "https://github.com/deepcharles/ruptures",
+    "ChangeForest": "https://github.com/mlondschien/changeforest",
+    "Clap": "https://github.com/ermshaua/clasp",
+    "Clasp": "https://github.com/ermshaua/clasp",
+    "Dynp": "https://github.com/deepcharles/ruptures",
+    "EAgglo": "https://github.com/aeon-toolkit/aeon",
+    "Espresso": "https://github.com/cruiseresearchgroup/ESPRESSO",
+    "FLUSS": "https://github.com/aeon-toolkit/aeon",
+    "GreedyGaussian": "https://github.com/cvxgrp/GGS",
+    "HMM": "https://github.com/aeon-toolkit/aeon",
+    "HdpHsmm": "https://github.com/mattjj/pyhsmm",
+    "Hidalgo": "https://github.com/aeon-toolkit/aeon",
+    "ICID": "https://github.com/IsolationKernel/iCID",
+    "InformationGain": "https://github.com/aeon-toolkit/aeon",
+    "KCPD": "https://github.com/deepcharles/ruptures",
+    "Pelt": "https://github.com/deepcharles/ruptures",
+    "Prophet": "https://github.com/facebook/prophet",
+    "RuLSIF": "https://github.com/anewgithubname/change_detection",
+    "TGLAD": "https://github.com/Harshs27/tGLAD",
+    "Ticc": "https://github.com/davidhallac/TICC",
+    "Time2State": "https://github.com/Lab-ANT/Time2State",
+    "Tire": "https://github.com/deryckt/TIRE",
+    "TSCP2": "https://github.com/cruiseresearchgroup/TSCP2",
+    "E2USD": "https://github.com/AI4CTS/E2Usd",
+}
+
+DOC_SLUGS = {
+    "Clap": "clap",
+    "Clasp": "clap",
+    "Dynp": "dynp",
+    "EAgglo": "eagglo",
+    "GaussianHMM": "gaussian_hmm",
+    "GreedyGaussian": "ggs",
+    "HdpHsmm": "hdp_hsmm",
+    "InformationGain": "igts",
+    "SeededBinSeg": "seeded_binseg",
+}
+
+
+def get_complexity(name: str) -> str:
+    entry = get_algo_entry(name)
+    return COMPLEXITY_BY_NAME.get(name, entry.complexity if entry else "")
+
 
 def get_algo_entry(name: str) -> AlgoEntry | None:
     """Lookup an algorithm entry by name (case-insensitive)."""
@@ -79,85 +187,16 @@ def get_algo_entry(name: str) -> AlgoEntry | None:
 
 
 # ---------------------------------------------------------------------------
-# Complexity classification (for color-coding in the UI)
+# Mathematical complexity notation
 # ---------------------------------------------------------------------------
 
-
-def classify_complexity(complexity: str) -> str:
-    """Categorize a complexity string into a speed tier.
-
-    Returns one of: ``linear``, ``log_linear``, ``quadratic``, ``cubic``.
-    """
-    s = complexity.lower().replace(" ", "")
-    if "n^3" in s or "n³" in s:
-        return "cubic"
-    if "n^2" in s or "n²" in s:
-        return "quadratic"
-    if "logn" in s or "log(n)" in s or "\\logn" in s:
-        return "log_linear"
-    return "linear"
-
-
-COMPLEXITY_COLORS = {
-    "linear": "#1e7d32",  # green
-    "log_linear": "#1565c0",  # blue
-    "quadratic": "#ef6c00",  # orange
-    "cubic": "#c62828",  # red
-}
-
-COMPLEXITY_LABELS = {
-    "linear": "linear",
-    "log_linear": "log-linear",
-    "quadratic": "quadratic",
-    "cubic": "cubic",
-}
-
-
-# ---------------------------------------------------------------------------
-# Variable glossary (for tooltips)
-# ---------------------------------------------------------------------------
-
-COMPLEXITY_GLOSSARY = {
-    "n": "number of points in the time series",
-    "d": "number of dimensions (channels)",
-    "l": "window size",
-    "n_cp": "number of change points",
-    "n_s": "number of distinct states",
-}
-
-COMPLEXITY_GLOSSARY_MD = "**Complexity notation:** " + " · ".join(
-    f"`{k}` = {v}" for k, v in COMPLEXITY_GLOSSARY.items()
+COMPLEXITY_TOOLTIP = (
+    "n: time points; d: channels; ℓ: window or subsequence length; "
+    "nCP: change points; nS: states; b: kernel basis size. Typical cost per run; "
+    "training iterations and classifier costs may add work."
 )
 
-
-def format_complexity_plain(s: str) -> str:
-    """Render a LaTeX-ish complexity string as plain text.
-
-    The complexity strings in :data:`ALGO_ENTRIES` use LaTeX fragments such as
-    ``\\log``, ``n^2`` and ``n_{cp}``. Gradio's Markdown renderer on the
-    Hugging Face Space runtime does not consistently process ``$...$`` math,
-    so we convert these strings into a readable Unicode form (e.g.
-    ``O(dn log l)``, ``O(n_cp dn²)``) instead of relying on KaTeX.
-    """
-    import re
-
-    if not s:
-        return s
-    out = s
-    out = out.replace("\\log", " log").replace("\\cdot", "·").replace("\\,", " ")
-    out = (
-        out.replace("n^2", "n²")
-        .replace("n^3", "n³")
-        .replace("d^2", "d²")
-        .replace("d^3", "d³")
-        .replace("n_s^2", "n_s²")
-        .replace("n_{cp}^2", "n_cp²")
-    )
-    # Subscripts: n_{cp} -> n_cp
-    out = re.sub(r"_\{([^}]+)\}", r"_\1", out)
-    # Strip any leftover backslashes
-    out = out.replace("\\", "")
-    return out
+LATEX_DELIMITERS = [{"left": "$", "right": "$", "display": False}]
 
 
 # ---------------------------------------------------------------------------
@@ -263,18 +302,28 @@ def build_algo_table(runtime_detectors: dict) -> str:
     for name, info in sorted(runtime_detectors.items(), key=lambda item: item[0].lower()):
         a = get_algo_entry(name)
         task = "CPD" if info.detector_type == "change_point_detection" else "SD"
-        family = a.family if a else info.category or "Other"
-        complexity = a.complexity if a else info.complexity
+        search, compared = TAXONOMY.get(name, ("Other", "—"))
+        complexity = get_complexity(name)
         license_name = a.license if a else "—"
-        source = a.source if a else "—"
-        complexity_text = (
-            f"`{format_complexity_plain(complexity)}`" if complexity and complexity not in ("-", "—") else "—"
+        source_label = a.source if a and a.source != "—" else "tsseg"
+        if name == "AutoPlait":
+            source_label = "Original software"
+        source_url = SOURCE_URLS.get(name)
+        if not source_url:
+            module_path = info.cls.__module__.replace(".", "/")
+            source_url = f"https://github.com/fchavelli/tsseg/blob/main/{module_path}.py"
+        doc_slug = DOC_SLUGS.get(name, name.lower())
+        doc_url = f"https://fchavelli.github.io/tsseg/detectors/{doc_slug}.html"
+        complexity_text = f"${complexity}$" if complexity and complexity not in ("-", "—") else "—"
+        rows.append(
+            f"| [{name}]({doc_url}) | {task} | {search} | {compared} | "
+            f"{complexity_text} | {license_name} | [{source_label}]({source_url}) |"
         )
-        rows.append(f"| {name} | {task} | {family} | {complexity_text} | {license_name} | {source} |")
 
     header = (
-        "| Algorithm | Task | Family | Complexity | License | Source |\n"
-        "|-----------|------|--------|------------|---------|--------|\n"
+        '| Algorithm | Task | Search strategy | Compared | Complexity <sup class="complexity-help" '
+        f'title="{COMPLEXITY_TOOLTIP}">?</sup> | License | Source |\n'
+        "|-----------|------|-----------------|----------|------------|---------|--------|\n"
     )
     return header + "\n".join(rows)
 
