@@ -2,8 +2,8 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Core – install tsseg with selected extras for HF Space
-# Removed 'docs' (sphinx – not needed at runtime) and 'accelerators' (numba – not needed for demo)
-tsseg[torch,prophet,aeon] @ git+https://github.com/fchavelli/tsseg.git
+# Extras for every detector enabled in the app (TensorFlow detectors are excluded).
+tsseg[torch,prophet,aeon,accelerators,tglad,beast,changeforest,fluss] @ git+https://github.com/fchavelli/tsseg.git
 
 # Web framework
 gradio>=6,<7
@@ -18,10 +18,3 @@ scipy>=1.11
 
 # YAML config
 pyyaml>=6.0
-
-# Matrix profile (FLUSS detector)
-stumpy>=1.12
-
-# BEAST (BeastDetector) — Bayesian change-point detector (C extension)
-# Requires numpy<2 at runtime; pin if needed by environment.
-Rbeast>=0.1.20

@@ -49,6 +49,29 @@ class TestAlgorithms:
             assert info.name == name
             assert info.detector_type in ("change_point_detection", "state_detection")
 
+    def test_catalogue_tracks_runtime_detectors(self):
+        from src.about_data import build_algo_table
+        from src.algorithms import get_all_detectors
+
+        detectors = get_all_detectors()
+        assert {"AutoPlait", "ChangeFinder", "ChangeForest", "GaussianHMM", "RuLSIF", "SeededBinSeg"} <= set(detectors)
+        assert "Patss" not in detectors
+        rows = build_algo_table(detectors).splitlines()[2:]
+        assert {row.split("|")[1].strip() for row in rows} == set(detectors)
+
+    def test_source_discovery_includes_lazy_exports(self):
+        import importlib.util
+        from pathlib import Path
+
+        from src.algorithms import _parse_algorithms_init_exports
+
+        spec = importlib.util.find_spec("tsseg.algorithms")
+        assert spec is not None and spec.origin is not None
+        exports = dict((name, module) for module, name in _parse_algorithms_init_exports(Path(spec.origin)))
+        assert exports["BeastDetector"] == "beast.detector"
+        assert exports["ChangeForestDetector"] == "changeforest.detector"
+        assert exports["PeltDetector"] == "pelt.detector"
+
     def test_get_detectors_by_type(self):
         from src.algorithms import get_detectors_by_type
 

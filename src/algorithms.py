@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import importlib
 import importlib.util
 import inspect
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
@@ -98,15 +98,12 @@ def _infer_category(name: str) -> str:
     return "Other"
 
 
-# Detectors excluded from the app (broken dependencies, unavailable on HF, etc.)
+# Detectors that cannot run in the app's deployment environment.
 _EXCLUDED_DETECTORS: set[str] = {
     "PatssDetector",  # pattern mining – missing deps
     "VQTSSDetector",  # deep learning – missing deps
-    # "VSAXDetector",    # symbolic – broken on HF
-    "AutoPlaitDetector",  # requires C binary not available on HF (TODO bundle)
     "TSCP2Detector",  # requires tensorflow not shipped on HF
     "SNLDSDetector",  # tensorflow + experimental
-    "ChangeFinderDetector",  # not in curated algo list
 }
 
 
@@ -127,6 +124,8 @@ def _iter_exported_detectors_from_package() -> Iterable[Tuple[str, type]]:
 
     exported = getattr(algorithms_pkg, "__all__", [])
     for name in exported:
+        if name in _EXCLUDED_DETECTORS:
+            continue
         try:
             obj = getattr(algorithms_pkg, name)
         except Exception:
@@ -136,39 +135,25 @@ def _iter_exported_detectors_from_package() -> Iterable[Tuple[str, type]]:
 
 
 def _parse_algorithms_init_exports(init_file: Path) -> list[tuple[str, str]]:
-    """Parse `tsseg/algorithms/__init__.py` to extract `(module, class)` exports."""
-    text = init_file.read_text(encoding="utf-8")
-    exports: list[tuple[str, str]] = []
-
-    in_multiline_import = False
-    multiline_module = ""
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        if in_multiline_import:
-            if line.startswith(")"):
-                in_multiline_import = False
-                multiline_module = ""
-                continue
-            name = line.split("#", 1)[0].strip().rstrip(",")
-            if name:
-                exports.append((multiline_module, name))
-            continue
-
-        m = re.match(r"^from \.([a-zA-Z0-9_\.]+) import \($", line)
-        if m:
-            in_multiline_import = True
-            multiline_module = m.group(1)
-            continue
-
-        m = re.match(r"^from \.([a-zA-Z0-9_\.]+) import ([A-Za-z0-9_]+)$", line)
-        if m:
-            exports.append((m.group(1), m.group(2)))
-
-    return exports
+    """Parse eager and lazy exports from ``tsseg.algorithms`` without importing it."""
+    tree = ast.parse(init_file.read_text(encoding="utf-8"))
+    modules: dict[str, str] = {}
+    exported: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            for alias in node.names:
+                modules[alias.asname or alias.name] = node.module
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                if target.id == "_LAZY_IMPORTS":
+                    lazy = ast.literal_eval(node.value)
+                    for name, (module, _attribute) in lazy.items():
+                        modules[name] = module.lstrip(".")
+                elif target.id == "__all__":
+                    exported = ast.literal_eval(node.value)
+    return [(modules[name], name) for name in exported if name in modules]
 
 
 def _iter_exported_detectors_from_source() -> Iterable[Tuple[str, type]]:
@@ -183,7 +168,7 @@ def _iter_exported_detectors_from_source() -> Iterable[Tuple[str, type]]:
 
     seen: set[str] = set()
     for module_rel, class_name in _parse_algorithms_init_exports(init_file):
-        if class_name in seen:
+        if class_name in seen or class_name in _EXCLUDED_DETECTORS:
             continue
         module_name = f"tsseg.algorithms.{module_rel}"
         try:

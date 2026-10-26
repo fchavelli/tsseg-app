@@ -198,9 +198,9 @@ def create_app() -> gr.Blocks:
 
         # -- Header --
         gr.Markdown(
-            """
+            f"""
             # tsseg — Time Series Segmentation
-            Segment time series with 30+ algorithms. Upload data or use built-in datasets,
+            Segment time series with {len(all_detectors)} algorithms. Upload data or use built-in datasets,
             compare results, evaluate with standard metrics.
 
             <p style="text-align:center; margin-top:2px">
@@ -227,7 +227,7 @@ def create_app() -> gr.Blocks:
                         )
                     with gr.Column(scale=4):
                         gr.Markdown(
-                            """
+                            f"""
 ### Welcome to **tsseg**
 
 **tsseg** is an open-source research project on **time series segmentation**,
@@ -241,7 +241,7 @@ unifying two complementary tasks under a single API:
 The project bundles together:
 
 - a **Python library** — [`tsseg`](https://github.com/fchavelli/tsseg) —
-  exposing 30+ algorithms behind a common scikit-learn / aeon-style interface;
+  exposing {len(all_detectors)} algorithms in this demo behind a common scikit-learn / aeon-style interface;
 - this interactive **demo** (where you are);
 - companion **research papers** describing the unified API and benchmark
   protocol (currently in review).
@@ -1109,7 +1109,7 @@ The project bundles together:
                     build_metric_table,
                 )
 
-                algo_table = build_algo_table()
+                algo_table = build_algo_table(all_detectors)
                 metric_table = build_metric_table()
                 dataset_table = build_dataset_table()
 
@@ -1118,7 +1118,7 @@ The project bundles together:
 
 **tsseg** is a Python library for **Time Series Segmentation**, covering both
 **Change Point Detection (CPD)** and **State Detection (SD)**.
-This app exposes 25+ algorithms through an interactive interface.
+This app exposes {len(all_detectors)} algorithms through an interactive interface.
 State detection algorithms are also available under the CPD task, since change points
 can be inferred from detected states.
 

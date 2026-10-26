@@ -85,7 +85,7 @@ tsseg-app/
 
 ## GPU Algorithms on CPU
 
-Algorithms requiring PyTorch (TIRE, TGLAD, E2USD, Time2State, VQTSS) and TensorFlow (TSCP2) are included and run on CPU. They will be slower than on GPU but fully functional. The environment variable `CUDA_VISIBLE_DEVICES=""` is set automatically.
+PyTorch-based algorithms (Tire, TGLAD, E2USD and Time2State) run on CPU. The app sets `CUDA_VISIBLE_DEVICES=""` automatically. TensorFlow-based detectors (TSCP2 and SNLDS) and Patss are excluded from the app.
 
 ## Development
 

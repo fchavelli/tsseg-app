@@ -34,6 +34,8 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("BinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "BSD-2", "ruptures"),
     AlgoEntry("BottomUp", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
     AlgoEntry("BOCD", "CPD", "Distribution-based", "O(dn^2)", "Apache-2.0", "hildensia"),
+    AlgoEntry("ChangeFinder", "CPD", "Distribution-based", "O(dn)", "AGPLv3", "tsseg"),
+    AlgoEntry("ChangeForest", "CPD", "Distribution-based", "—", "BSD-3", "changeforest"),
     AlgoEntry("DynP", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
     AlgoEntry("EAgglo", "CPD", "Distribution-based", "O(dn^2)", "BSD-3", "aeon"),
     AlgoEntry("GreedyGaussian", "CPD", "Distribution-based", "O(n_{cp}^2 d^3 n)", "BSD-3", "aeon"),
@@ -41,6 +43,8 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("KCPD", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
     AlgoEntry("Pelt", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
     AlgoEntry("Prophet", "CPD", "Distribution-based", "O(n_{cp}\\,dn)", "MIT", "Facebook"),
+    AlgoEntry("Random", "CPD", "Baseline", "O(n)", "AGPLv3", "tsseg"),
+    AlgoEntry("SeededBinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "AGPLv3", "tsseg"),
     AlgoEntry("Window", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
     AlgoEntry("Beast", "CPD", "Distribution-based", "-", "MIT", "Rbeast"),
     # ── CPD · Subsequence-based ───────────────────────────────────────────
@@ -48,12 +52,14 @@ ALGO_ENTRIES: Sequence[AlgoEntry] = (
     AlgoEntry("ESPRESSO", "CPD", "Subsequence-based", "O(dn^2 + n_{cp}\\,n)", "—", "cruiseresearchgroup"),
     AlgoEntry("FLUSS", "CPD", "Subsequence-based", "O(dn^2 + n_{cp}\\,n)", "BSD-3", "aeon"),
     AlgoEntry("InformationGain", "CPD", "Subsequence-based", "O(n_{cp}\\,dn^2)", "BSD-3", "aeon"),
+    AlgoEntry("RuLSIF", "CPD", "Distribution-based", "—", "MIT", "Liu et al."),
     AlgoEntry("TGLAD", "CPD", "Subsequence-based", "O(d^3 n)", "Non-Commercial", "Harshs27"),
     AlgoEntry("Tire", "CPD", "Subsequence-based", "O(dn)", "—", "KU Leuven"),
     AlgoEntry("TSCP2", "CPD", "Subsequence-based", "O(dn)", "—", "cruiseresearchgroup"),
     # ── SD · Integrated ───────────────────────────────────────────────────
     AlgoEntry("AutoPlait", "SD", "Integrated", "O(dn)", "—", "—"),
     AlgoEntry("HdpHsmm", "SD", "Integrated", "O(dn + n_s \\min(n, 2000)^2)", "—", "mattjj/pyhsmm (reimpl.)"),
+    AlgoEntry("GaussianHMM", "SD", "Integrated", "—", "AGPLv3", "tsseg"),
     AlgoEntry("Hidalgo", "SD", "Integrated", "O(dn^2)", "BSD-3", "aeon"),
     AlgoEntry("HMM", "SD", "Integrated", "-", "BSD-3", "hmmlearn"),
     # ── SD · Decomposed ───────────────────────────────────────────────────
@@ -247,12 +253,24 @@ DATASET_ENTRIES: Sequence[DatasetEntry] = (
 # ---------------------------------------------------------------------------
 
 
-def build_algo_table(runtime_detectors: dict | None = None) -> str:
-    """Return a Markdown table of algorithms (no group separator rows)."""
+def build_algo_table(runtime_detectors: dict) -> str:
+    """Return a table of detectors exposed by the running app.
+
+    Curated entries supply metadata, while the runtime registry decides which
+    algorithms exist. New detectors without an entry still appear in the table.
+    """
     rows: list[str] = []
-    for a in ALGO_ENTRIES:
-        complexity = format_complexity_plain(a.complexity)
-        rows.append(f"| {a.name} | {a.task} | {a.family} | `{complexity}` | {a.license} | {a.source} |")
+    for name, info in sorted(runtime_detectors.items(), key=lambda item: item[0].lower()):
+        a = get_algo_entry(name)
+        task = "CPD" if info.detector_type == "change_point_detection" else "SD"
+        family = a.family if a else info.category or "Other"
+        complexity = a.complexity if a else info.complexity
+        license_name = a.license if a else "—"
+        source = a.source if a else "—"
+        complexity_text = (
+            f"`{format_complexity_plain(complexity)}`" if complexity and complexity not in ("-", "—") else "—"
+        )
+        rows.append(f"| {name} | {task} | {family} | {complexity_text} | {license_name} | {source} |")
 
     header = (
         "| Algorithm | Task | Family | Complexity | License | Source |\n"
