@@ -113,11 +113,7 @@ def _get_detector_choices(task_label: str) -> list[tuple[str, str]]:
         detectors.update(state_detectors)
     choices = []
     for name, info in sorted(detectors.items()):
-        label = (
-            f"{name} · SD (change points inferred)"
-            if task == "change_point_detection" and info.detector_type == "state_detection"
-            else name
-        )
+        label = f"{name} [SD]" if task == "change_point_detection" and info.detector_type == "state_detection" else name
         choices.append((label, name))
     return choices
 
@@ -170,22 +166,48 @@ APP_CSS = """
 .param-section { max-height: 55vh; overflow-y: auto; padding-right: 4px; }
 footer { display: none !important; }
 .complexity-help {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 0.95rem;
-    height: 0.95rem;
+    width: 0.9rem;
+    height: 0.9rem;
     margin-left: 0.2rem;
     border-radius: 50%;
     background: #3b5998;
     color: #fff;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
     line-height: 1;
-    vertical-align: super;
+    vertical-align: baseline;
+    transform: translateY(-0.12em);
     cursor: help;
+    z-index: 20;
 }
 .complexity-help:hover { background: #274575; }
+.complexity-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    width: min(20rem, 75vw);
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.4rem;
+    background: #1f2937;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
+    z-index: 100;
+    pointer-events: none;
+}
+.complexity-help:hover .complexity-tooltip,
+.complexity-help:focus .complexity-tooltip { display: block; }
+.detector-meta { position: relative; overflow: visible !important; padding-top: 0.25rem; }
+.detector-meta p { overflow: visible !important; line-height: 1.7; }
 .sms-breakdown { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 """
 
@@ -550,13 +572,22 @@ The project bundles together:
                         detector_dropdown = gr.Dropdown(
                             choices=_get_detector_choices("Change Point Detection"),
                             label="Algorithm",
+                            info="[SD] = State Detection; change points inferred from states",
                             interactive=True,
                         )
 
                         # Update detector list when task changes
                         def update_detectors(task_label):
                             choices = _get_detector_choices(task_label)
-                            return gr.update(choices=choices, value=choices[0][1] if choices else None)
+                            return gr.update(
+                                choices=choices,
+                                value=choices[0][1] if choices else None,
+                                info=(
+                                    "[SD] = State Detection; change points inferred from states"
+                                    if task_label == "Change Point Detection"
+                                    else None
+                                ),
+                            )
 
                         task_selector.change(update_detectors, inputs=[task_selector], outputs=[detector_dropdown])
 
@@ -573,21 +604,20 @@ The project bundles together:
 
                             # --- Detector metadata and mathematical complexity ---
                             from src.about_data import (
-                                COMPLEXITY_TOOLTIP,
+                                COMPLEXITY_HELP_HTML,
                                 LATEX_DELIMITERS,
                                 TAXONOMY,
                             )
 
                             complexity_html = ""
                             if info.complexity and info.complexity not in ("-", "—"):
-                                complexity_html = (
-                                    f" · ${info.complexity}$"
-                                    f'<sup class="complexity-help" title="{COMPLEXITY_TOOLTIP}">?</sup>'
-                                )
+                                complexity_html = f" · ${info.complexity}${COMPLEXITY_HELP_HTML}"
                             search, compared = TAXONOMY.get(detector_name, ("Other", "—"))
                             gr.Markdown(
                                 f"**{detector_name}** · {task_type} · {search} / {compared}{complexity_html}",
                                 latex_delimiters=LATEX_DELIMITERS,
+                                sanitize_html=False,
+                                elem_classes="detector-meta",
                             )
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)
@@ -1176,6 +1206,7 @@ The project bundles together:
             # ==================================================================
             with gr.Tab("About", id="tab_about"):
                 from src.about_data import (
+                    COMPLEXITY_HELP_HTML,
                     DISCLAIMER_MD,
                     LATEX_DELIMITERS,
                     LINKS_MD,
@@ -1201,12 +1232,12 @@ can be inferred from detected states.
 
 The taxonomy describes **how** a segmentation is found (search strategy) and
 **what** the method compares. CPD methods assign each segment a new label;
-SD methods can recognise states that recur. Hover over **?** beside a complexity
-to see its notation. Complexity depends on parameters and implementation.
+SD methods can recognise states that recur. Complexity depends on parameters
+and implementation.
 
 ---
 
-#### Algorithms
+#### Algorithms · Complexity notation {COMPLEXITY_HELP_HTML}
 
 {algo_table}
 
@@ -1233,6 +1264,7 @@ to see its notation. Complexity depends on parameters and implementation.
 {LINKS_MD}
                 """,
                     latex_delimiters=LATEX_DELIMITERS,
+                    sanitize_html=False,
                 )
 
     return app

@@ -83,7 +83,7 @@ tsseg-app/
 | **Evaluation** | Compute F1, ARI, SMS, etc. when ground truth is available; inspect SMS delay, transition, isolation and missing errors |
 | **About** | Runtime algorithm list with search/comparison taxonomy, mathematical complexity and source links |
 
-In the CPD algorithm menu, state detectors are marked **SD (change points inferred)**. Their state labels can still be evaluated with SD metrics after a run.
+In the CPD algorithm menu, state detectors carry a compact **[SD]** badge. Their state labels can still be evaluated with SD metrics after a run.
 
 Synthetic data uses a minimum segment length, distinct channel profiles and a reproducible seed. Level matching at boundaries is optional and off by default because it can hide genuine level changes. Gaussian-process patterns are sampled on a bounded knot grid and interpolated, so the full 10,000-point range stays practical.
 

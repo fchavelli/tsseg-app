@@ -94,17 +94,36 @@ class TestAlgorithms:
         assert {row.split("|")[1].strip().split("](")[0][1:] for row in rows} == set(detectors)
         assert all("https://" in row for row in rows)
         assert any("$O(" in row for row in rows)
-        assert "complexity-help" in build_algo_table(detectors).splitlines()[0]
+        assert "| Complexity |" in build_algo_table(detectors).splitlines()[0]
 
     def test_task_menu_marks_state_detectors_in_cpd(self):
         from app import _get_detector_choices
 
         cpd = dict(_get_detector_choices("Change Point Detection"))
         sd = dict(_get_detector_choices("State Detection"))
-        assert "GaussianHMM · SD (change points inferred)" in cpd
-        assert cpd["GaussianHMM · SD (change points inferred)"] == "GaussianHMM"
+        assert "GaussianHMM [SD]" in cpd
+        assert cpd["GaussianHMM [SD]"] == "GaussianHMM"
         assert "GaussianHMM" in sd
         assert "Pelt" in cpd and "Pelt" not in sd
+
+    def test_tooltip_and_menu_legend_are_rendered(self):
+        import app
+        from src.about_data import COMPLEXITY_HELP_HTML
+
+        ui = app.create_app()
+        about = next(
+            component
+            for component in ui.config["components"]
+            if component["type"] == "markdown" and "#### About tsseg-app" in str(component["props"].get("value"))
+        )
+        assert COMPLEXITY_HELP_HTML in about["props"]["value"]
+        assert about["props"]["sanitize_html"] is False
+        assert ".complexity-help:hover .complexity-tooltip" in app.APP_CSS
+        update_detectors = next(
+            item.fn for item in ui.fns.values() if item.fn and item.fn.__name__ == "update_detectors"
+        )
+        assert update_detectors("State Detection")["info"] is None
+        assert "[SD]" in update_detectors("Change Point Detection")["info"]
 
     def test_source_discovery_includes_lazy_exports(self):
         import importlib.util

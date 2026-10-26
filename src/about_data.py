@@ -195,6 +195,10 @@ COMPLEXITY_TOOLTIP = (
     "nCP: change points; nS: states; b: kernel basis size. Typical cost per run; "
     "training iterations and classifier costs may add work."
 )
+COMPLEXITY_HELP_HTML = (
+    '<span class="complexity-help" tabindex="0" aria-label="Complexity notation">?'
+    f'<span class="complexity-tooltip" role="tooltip">{COMPLEXITY_TOOLTIP}</span></span>'
+)
 
 LATEX_DELIMITERS = [{"left": "$", "right": "$", "display": False}]
 
@@ -321,8 +325,7 @@ def build_algo_table(runtime_detectors: dict) -> str:
         )
 
     header = (
-        '| Algorithm | Task | Search strategy | Compared | Complexity <sup class="complexity-help" '
-        f'title="{COMPLEXITY_TOOLTIP}">?</sup> | License | Source |\n'
+        "| Algorithm | Task | Search strategy | Compared | Complexity | License | Source |\n"
         "|-----------|------|-----------------|----------|------------|---------|--------|\n"
     )
     return header + "\n".join(rows)
