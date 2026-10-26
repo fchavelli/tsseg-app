@@ -10,7 +10,7 @@ app_file: app.py
 pinned: false
 ---
 
-# tsseg-app — Interactive Time Series Segmentation
+# tsseg-app - Interactive Time Series Segmentation
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
@@ -23,13 +23,13 @@ An interactive web application for **Time Series Segmentation**, powered by [tss
 
 ## Features
 
-- **30+ segmentation algorithms** — Change Point Detection & State Detection
-- **Upload your own data** — CSV with optional ground truth labels
-- **Built-in datasets** — MoCap (CMU 86) and synthetic generators
-- **Dynamic parameter tuning** — interactive sliders, dropdowns, and text inputs
-- **Multi-algorithm comparison** — side-by-side visual comparison
-- **Standard metrics** — F1, Covering, ARI, NMI, SMS, and more
-- **Export results** — download predictions and scores as CSV
+- **30+ segmentation algorithms** - Change Point Detection & State Detection
+- **Upload your own data** - CSV with optional ground truth labels
+- **Built-in datasets** - MoCap (CMU 86) and synthetic generators
+- **Dynamic parameter tuning** - interactive sliders, dropdowns, and text inputs
+- **Multi-algorithm comparison** - side-by-side visual comparison
+- **Standard metrics** - F1, Covering, ARI, NMI, SMS, and more
+- **Export results** - download predictions and scores as CSV
 
 ## Quick Start
 
