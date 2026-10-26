@@ -96,11 +96,13 @@ def summarize_sms_errors(y_true: np.ndarray, y_pred: np.ndarray) -> list[dict[st
     Each type contributes its mismatched time points and its weighted penalty
     to ``1 - SMS``. The percentages use the full series as denominator.
     """
-    output = StateMatchingScore().compute(y_true, y_pred, return_errors=True)
     n = len(y_true)
+    if len(y_pred) != n:
+        raise ValueError("SMS predictions and ground truth must have the same length")
+    errors = StateMatchingScore().compute(y_true, y_pred, return_errors=True)["errors"] if n else []
     rows = []
     for error_type in SMS_ERROR_TYPES:
-        blocks = [block for block in output["errors"] if block["type"] == error_type]
+        blocks = [block for block in errors if block["type"] == error_type]
         points = sum(int(block["size"]) for block in blocks)
         penalty = sum(float(block["penalty"]) for block in blocks)
         rows.append(
@@ -108,9 +110,9 @@ def summarize_sms_errors(y_true: np.ndarray, y_pred: np.ndarray) -> list[dict[st
                 "Error type": error_type.title(),
                 "Blocks": len(blocks),
                 "Points": points,
-                "Time (%)": round(100 * points / n, 2) if n else 0.0,
-                "Penalty / n": round(penalty / n, 4) if n else 0.0,
-                "SMS loss": round((points + penalty) / n, 4) if n else 0.0,
+                "Time (%)": 100 * points / n if n else 0.0,
+                "Penalty / n": penalty / n if n else 0.0,
+                "SMS loss": (points + penalty) / n if n else 0.0,
             }
         )
     return rows

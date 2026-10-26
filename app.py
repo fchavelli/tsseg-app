@@ -169,7 +169,24 @@ APP_CSS = """
 .run-btn { min-height: 40px !important; font-weight: 500 !important; }
 .param-section { max-height: 55vh; overflow-y: auto; padding-right: 4px; }
 footer { display: none !important; }
-.complexity-help { cursor: help; color: #52679a; margin-left: 2px; font-size: 0.72em; }
+.complexity-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.95rem;
+    height: 0.95rem;
+    margin-left: 0.2rem;
+    border-radius: 50%;
+    background: #3b5998;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: super;
+    cursor: help;
+}
+.complexity-help:hover { background: #274575; }
+.sms-breakdown { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 """
 
 APP_THEME = gr.themes.Base(
@@ -1005,11 +1022,11 @@ The project bundles together:
                         eval_results_md = gr.Markdown("")
                         eval_table = gr.Dataframe(label="Evaluation results", interactive=False)
                         eval_chart = gr.Plot(label="Scores comparison")
-                        with gr.Group(visible=False) as sms_group:
+                        with gr.Column(variant="default", visible=False, elem_classes="sms-breakdown") as sms_group:
                             gr.Markdown(
                                 "**SMS error decomposition** — delay: boundary offset; transition: one true boundary "
                                 "covered; isolation: isolated wrong state; missing: several true boundaries covered. "
-                                "The four SMS loss contributions add up to `1 − SMS`."
+                                "The four SMS loss contributions add up to `1 − SMS` before display rounding."
                             )
                             eval_sms_table = gr.Dataframe(label="SMS error decomposition", interactive=False)
                             eval_sms_chart = gr.Plot(label="SMS loss by error type")
@@ -1122,6 +1139,8 @@ The project bundles together:
 
                     sms_df = pd.DataFrame(sms_rows) if sms_rows else None
                     sms_chart = make_sms_breakdown_chart(sms_df) if sms_df is not None else None
+                    if sms_df is not None:
+                        sms_df = sms_df.round({"Time (%)": 2, "Penalty / n": 4, "SMS loss": 4})
                     return info, df, chart, sms_df, sms_chart
 
                 evaluate_btn.click(

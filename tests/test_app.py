@@ -264,18 +264,44 @@ class TestParams:
 
 
 class TestMetrics:
-    def test_sms_error_decomposition_matches_score(self):
+    @pytest.mark.parametrize(
+        ("error_type", "truth", "pred", "points", "penalty", "score"),
+        [
+            ("Delay", np.repeat([0, 1], 10), np.repeat([0, 1], [12, 8]), 2, 0.2, 0.89),
+            ("Isolation", np.repeat([0, 1], 10), np.where(np.arange(20) == 5, 1, np.repeat([0, 1], 10)), 1, 0.4, 0.93),
+            ("Transition", np.repeat([0, 1], 10), np.repeat([0, 2, 1], [8, 4, 8]), 4, 0.96, 0.752),
+            ("Missing", np.repeat([1, 2, 3, 0], [2, 2, 2, 14]), np.zeros(20, dtype=int), 6, 1.5, 0.625),
+        ],
+    )
+    def test_sms_error_decomposition_matches_reference(self, error_type, truth, pred, points, penalty, score):
         from tsseg.metrics import StateMatchingScore
 
         from src.metrics import summarize_sms_errors
 
-        truth = np.array([0] * 5 + [1] * 5 + [2] * 5)
-        pred = np.array([0] * 6 + [1] * 4 + [2] * 5)
         rows = summarize_sms_errors(truth, pred)
-        score = StateMatchingScore().compute(truth, pred)["score"]
+        actual_score = StateMatchingScore().compute(truth, pred)["score"]
         assert {row["Error type"] for row in rows} == {"Delay", "Transition", "Isolation", "Missing"}
-        assert sum(row["Points"] for row in rows) > 0
-        assert abs(sum(row["SMS loss"] for row in rows) - (1 - score)) < 0.0003
+        active = next(row for row in rows if row["Error type"] == error_type)
+        assert active["Blocks"] == 1
+        assert active["Points"] == points
+        assert active["Time (%)"] == pytest.approx(100 * points / 20)
+        assert active["Penalty / n"] == pytest.approx(penalty / 20)
+        assert active["SMS loss"] == pytest.approx((points + penalty) / 20)
+        assert actual_score == pytest.approx(score)
+        assert sum(row["SMS loss"] for row in rows) == pytest.approx(1 - actual_score, abs=1e-12)
+
+    def test_sms_error_decomposition_preserves_precision(self):
+        from tsseg.metrics import StateMatchingScore
+
+        from src.metrics import summarize_sms_errors
+
+        rng = np.random.default_rng(42)
+        for _ in range(30):
+            truth = rng.integers(0, 4, size=127)
+            pred = rng.integers(0, 5, size=127)
+            rows = summarize_sms_errors(truth, pred)
+            score = StateMatchingScore().compute(truth, pred)["score"]
+            assert sum(row["SMS loss"] for row in rows) == pytest.approx(1 - score, abs=1e-12)
 
     def test_sd_run_from_cpd_menu_can_be_evaluated_as_sd(self):
         from app import create_app
@@ -296,6 +322,9 @@ class TestMetrics:
         assert scores["State Matching Score"].iloc[0] < 1
         assert breakdown["Points"].sum() == 5
         assert chart is not None
+        assert sum(float(y) for trace in chart.data for y in trace.y) == pytest.approx(
+            1 - scores["State Matching Score"].iloc[0]
+        )
 
     def test_compute_cpd_metrics(self):
         from src.metrics import compute_metrics
