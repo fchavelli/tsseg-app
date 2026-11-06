@@ -12,124 +12,53 @@ from typing import Sequence
 
 @dataclass(frozen=True)
 class AlgoEntry:
-    """One row of the algorithm table."""
+    """Licence and upstream source of a detector (placement: ``src/taxonomy.py``)."""
 
-    name: str
-    task: str  # "CPD" or "SD"
-    family: str  # Distribution-based, Subsequence-based, Integrated, Decomposed
-    complexity: str  # Big-O complexity (math notation, no $ wrappers)
+    name: str  # detector name in the app (class name without "Detector")
     license: str  # SPDX-like short id, or "—" if unknown
     source: str  # upstream project / author
 
 
-# Ordered: CPD Distribution-based → CPD Subsequence-based → SD Integrated → SD Decomposed
 ALGO_ENTRIES: Sequence[AlgoEntry] = (
-    # ── CPD · Distribution-based ──────────────────────────────────────────
-    AlgoEntry("AMOC", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("BinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "BSD-2", "ruptures"),
-    AlgoEntry("BottomUp", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("BOCD", "CPD", "Distribution-based", "O(dn^2)", "MIT", "hildensia"),
-    AlgoEntry("ChangeFinder", "CPD", "Distribution-based", "O(dn)", "AGPLv3", "tsseg"),
-    AlgoEntry("ChangeForest", "CPD", "Distribution-based", "—", "BSD-3", "changeforest"),
-    AlgoEntry("DynP", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
-    AlgoEntry("EAgglo", "CPD", "Distribution-based", "O(dn^2)", "BSD-3", "aeon"),
-    AlgoEntry("GreedyGaussian", "CPD", "Distribution-based", "O(n_{cp}^2 d^3 n)", "BSD-2", "GGS"),
-    AlgoEntry("ICID", "CPD", "Distribution-based", "O(dn)", "GPLv3", "IsolationKernel"),
-    AlgoEntry("KCPD", "CPD", "Distribution-based", "O(n_{cp}\\,dn^2)", "BSD-2", "ruptures"),
-    AlgoEntry("Pelt", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("Prophet", "CPD", "Distribution-based", "O(n_{cp}\\,dn)", "MIT", "Facebook"),
-    AlgoEntry("Random", "CPD", "Baseline", "O(n)", "AGPLv3", "tsseg"),
-    AlgoEntry("SeededBinSeg", "CPD", "Distribution-based", "O(dn\\log n)", "AGPLv3", "tsseg"),
-    AlgoEntry("Window", "CPD", "Distribution-based", "O(dn)", "BSD-2", "ruptures"),
-    AlgoEntry("Beast", "CPD", "Distribution-based", "-", "GPL-2.0+", "Rbeast"),
-    # ── CPD · Subsequence-based ───────────────────────────────────────────
-    AlgoEntry("CLaSP", "CPD", "Subsequence-based", "O(n_{cp}\\,dn^2)", "BSD-3", "claspy"),
-    AlgoEntry("ESPRESSO", "CPD", "Subsequence-based", "O(dn^2 + n_{cp}\\,n)", "—", "cruiseresearchgroup"),
-    AlgoEntry("FLUSS", "CPD", "Subsequence-based", "O(dn^2 + n_{cp}\\,n)", "BSD-3", "aeon"),
-    AlgoEntry("InformationGain", "CPD", "Subsequence-based", "O(n_{cp}\\,dn^2)", "BSD-3", "aeon"),
-    AlgoEntry("RuLSIF", "CPD", "Distribution-based", "—", "MIT", "Liu et al."),
-    AlgoEntry("TGLAD", "CPD", "Subsequence-based", "O(d^3 n)", "Non-Commercial", "Harshs27"),
-    AlgoEntry("Tire", "CPD", "Subsequence-based", "O(dn)", "—", "KU Leuven"),
-    AlgoEntry("TSCP2", "CPD", "Subsequence-based", "O(dn)", "—", "cruiseresearchgroup"),
-    # ── SD · Integrated ───────────────────────────────────────────────────
-    AlgoEntry("AutoPlait", "SD", "Integrated", "O(dn)", "—", "—"),
-    AlgoEntry("HdpHsmm", "SD", "Integrated", "O(dn + n_s \\min(n, 2000)^2)", "—", "mattjj/pyhsmm (reimpl.)"),
-    AlgoEntry("GaussianHMM", "SD", "Integrated", "—", "AGPLv3", "tsseg"),
-    AlgoEntry("Hidalgo", "SD", "Integrated", "O(dn^2)", "BSD-3", "aeon"),
-    AlgoEntry("HMM", "SD", "Integrated", "-", "BSD-3", "hmmlearn"),
-    # ── SD · Decomposed ───────────────────────────────────────────────────
-    AlgoEntry("TICC", "SD", "Decomposed", "O(n_s(dn + (dl)^3))", "BSD-2", "davidhallac"),
-    AlgoEntry("Time2State", "SD", "Decomposed", "O(dn)", "MIT", "Lab-ANT"),
-    AlgoEntry("E2USD", "SD", "Decomposed", "O(dn\\log l)", "—", "AI4CTS"),
-    AlgoEntry("Clap", "SD", "Decomposed", "O(n_{cp}\\,n(nd + n_{cp}\\log n_{cp}))", "BSD-3", "claspy"),
+    AlgoEntry("AMOC", "BSD-2", "ruptures"),
+    AlgoEntry("AutoPlait", "—", "—"),
+    AlgoEntry("Beast", "GPL-2.0+", "Rbeast"),
+    AlgoEntry("BinSeg", "BSD-2", "ruptures"),
+    AlgoEntry("BOCD", "MIT", "hildensia"),
+    AlgoEntry("BottomUp", "BSD-2", "ruptures"),
+    AlgoEntry("ChangeFinder", "AGPLv3", "tsseg"),
+    AlgoEntry("ChangeForest", "BSD-3", "changeforest"),
+    AlgoEntry("Clap", "BSD-3", "claspy"),
+    AlgoEntry("CLaSP", "BSD-3", "claspy"),
+    AlgoEntry("DynP", "BSD-2", "ruptures"),
+    AlgoEntry("E2USD", "—", "AI4CTS"),
+    AlgoEntry("EAgglo", "BSD-3", "aeon"),
+    AlgoEntry("ESPRESSO", "—", "cruiseresearchgroup"),
+    AlgoEntry("FLUSS", "BSD-3", "aeon"),
+    AlgoEntry("GaussianHMM", "AGPLv3", "tsseg"),
+    AlgoEntry("GreedyGaussian", "BSD-2", "GGS"),
+    AlgoEntry("HdpHsmm", "—", "mattjj/pyhsmm (reimpl.)"),
+    AlgoEntry("Hidalgo", "BSD-3", "aeon"),
+    AlgoEntry("HMM", "BSD-3", "hmmlearn"),
+    AlgoEntry("ICID", "GPLv3", "IsolationKernel"),
+    AlgoEntry("InformationGain", "BSD-3", "aeon"),
+    AlgoEntry("KCPD", "BSD-2", "ruptures"),
+    AlgoEntry("Pelt", "BSD-2", "ruptures"),
+    AlgoEntry("Prophet", "MIT", "Facebook"),
+    AlgoEntry("Random", "AGPLv3", "tsseg"),
+    AlgoEntry("RuLSIF", "MIT", "Liu et al."),
+    AlgoEntry("SeededBinSeg", "AGPLv3", "tsseg"),
+    AlgoEntry("SST", "AGPLv3", "tsseg"),
+    AlgoEntry("TGLAD", "Non-Commercial", "Harshs27"),
+    AlgoEntry("TICC", "BSD-2", "davidhallac"),
+    AlgoEntry("Time2State", "MIT", "Lab-ANT"),
+    AlgoEntry("Tire", "—", "KU Leuven"),
+    AlgoEntry("TSCP2", "—", "cruiseresearchgroup"),
+    AlgoEntry("Window", "BSD-2", "ruptures"),
 )
 
 # Quick lookup by name (case-insensitive)
 ALGO_BY_NAME: dict[str, AlgoEntry] = {a.name.lower(): a for a in ALGO_ENTRIES}
-
-# Search strategy and comparison axis of the tsseg taxonomy. Keys are the
-# detector names shown in the app; candidates are intentionally omitted.
-TAXONOMY: dict[str, tuple[str, str]] = {
-    "Amoc": ("Optimal DP", "Observation model"),
-    "AutoPlait": ("State sequence DP", "Observation model"),
-    "Beast": ("Bayesian DP", "Observation model"),
-    "BinSeg": ("Binary segmentation", "Selected cost"),
-    "BOCD": ("Bayesian DP", "Observation model"),
-    "BottomUp": ("Bottom-up", "Selected cost"),
-    "ChangeFinder": ("Profile + peaks", "Observation model"),
-    "ChangeForest": ("Binary segmentation", "Model-free distribution"),
-    "Clap": ("Segment, then group", "Subsequence shapes"),
-    "Clasp": ("Binary segmentation", "Subsequence shapes"),
-    "Dynp": ("Optimal DP", "Selected cost"),
-    "E2USD": ("Cluster windows", "Learned representation"),
-    "EAgglo": ("Bottom-up", "Model-free distribution"),
-    "Espresso": ("Profile + peaks", "Subsequence shapes"),
-    "FLUSS": ("Profile + peaks", "Subsequence shapes"),
-    "GaussianHMM": ("State sequence DP", "Observation model"),
-    "GreedyGaussian": ("Binary segmentation", "Observation model"),
-    "HMM": ("State sequence DP", "Observation model"),
-    "HdpHsmm": ("State sequence DP", "Observation model"),
-    "Hidalgo": ("Cluster windows", "Observation model"),
-    "ICID": ("Profile + peaks", "Model-free distribution"),
-    "InformationGain": ("Binary segmentation", "Observation model"),
-    "KCPD": ("Optimal DP", "Model-free distribution"),
-    "Pelt": ("Optimal DP", "Selected cost"),
-    "Prophet": ("Convex relaxation", "Observation model"),
-    "Random": ("Baseline", "—"),
-    "RuLSIF": ("Profile + peaks", "Model-free distribution"),
-    "SeededBinSeg": ("Binary segmentation", "Observation model"),
-    "TGLAD": ("Profile + peaks", "Observation model"),
-    "Ticc": ("State sequence DP", "Observation model"),
-    "Time2State": ("Cluster windows", "Learned representation"),
-    "Tire": ("Profile + peaks", "Learned representation"),
-    "Window": ("Profile + peaks", "Selected cost"),
-}
-
-COMPLEXITY_BY_NAME = {
-    "Beast": r"O(dn)",
-    "BOCD": r"O(dn+n^3)",
-    "BottomUp": r"O(dn\log n)",
-    "ChangeForest": "",  # depends on classifier and segmentation tree
-    "ChangeFinder": r"O(dn)",
-    "Clap": r"O(n_{\mathrm{CP}}n(nd+n_{\mathrm{CP}}\log n_{\mathrm{CP}}))",
-    "Dynp": r"O(n_{\mathrm{CP}}dn^2)",
-    "E2USD": r"O(dn\ell\log\ell)",
-    "Espresso": r"O(dn^2\log n)",
-    "GaussianHMM": r"O(n n_{\mathrm{S}}(n_{\mathrm{S}}+d))",
-    "GreedyGaussian": r"O(n_{\mathrm{CP}}d^3n)",
-    "HMM": r"O(n_{\mathrm{S}}^2n)",
-    "HdpHsmm": r"O(dn+n_{\mathrm{S}}(n_{\mathrm{S}}+d^2))",
-    "ICID": r"O(dn+n^2)",
-    "InformationGain": r"O(n_{\mathrm{CP}}^2dn)",
-    "KCPD": "",  # depends on kernel cost and PELT/DynP search mode
-    "Prophet": r"O(dn)",
-    "RuLSIF": r"O(nb^3)",
-    "SeededBinSeg": r"O(dn\log n)",
-    "Ticc": r"O(n_{\mathrm{S}}(n(d\ell)^2+(d\ell)^3))",
-    "Time2State": r"O(dn\ell)",
-    "Tire": r"O(dn\ell)",
-    "Window": r"O(dn\ell)",
-}
 
 SOURCE_URLS = {
     "Amoc": "https://github.com/deepcharles/ruptures",
@@ -163,23 +92,6 @@ SOURCE_URLS = {
     "E2USD": "https://github.com/AI4CTS/E2Usd",
 }
 
-DOC_SLUGS = {
-    "Clap": "clap",
-    "Clasp": "clap",
-    "Dynp": "dynp",
-    "EAgglo": "eagglo",
-    "GaussianHMM": "gaussian_hmm",
-    "GreedyGaussian": "ggs",
-    "HdpHsmm": "hdp_hsmm",
-    "InformationGain": "igts",
-    "SeededBinSeg": "seeded_binseg",
-}
-
-
-def get_complexity(name: str) -> str:
-    entry = get_algo_entry(name)
-    return COMPLEXITY_BY_NAME.get(name, entry.complexity if entry else "")
-
 
 def get_algo_entry(name: str) -> AlgoEntry | None:
     """Lookup an algorithm entry by name (case-insensitive)."""
@@ -192,16 +104,14 @@ def get_algo_entry(name: str) -> AlgoEntry | None:
 
 COMPLEXITY_TOOLTIP = (
     "n: time points; d: channels; ℓ: window or subsequence length; "
-    "nCP: change points; nS: states; b: kernel basis size. Typical cost per run; "
-    "training iterations and classifier costs may add work."
+    "nCP: change points; nS: states; b: kernel basis size. Time of one run as implemented, "
+    "default settings; epochs and sampler or EM iterations omitted. "
+    "*: typical case of a search that prunes or stops early."
 )
 COMPLEXITY_HELP_HTML = (
     '<span class="complexity-help" tabindex="0" aria-label="Complexity notation">?'
     f'<span class="complexity-tooltip" role="tooltip">{COMPLEXITY_TOOLTIP}</span></span>'
 )
-
-LATEX_DELIMITERS = [{"left": "$", "right": "$", "display": False}]
-
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -223,7 +133,7 @@ METRIC_ENTRIES: Sequence[MetricEntry] = (
     MetricEntry(
         "Gaussian F1",
         "CPD",
-        "Gaussian-weighted soft F1 — predictions are rewarded via a Gaussian kernel "
+        "Gaussian-weighted soft F1: predictions are rewarded via a Gaussian kernel "
         "that decays with distance, no hard margin",
     ),
     MetricEntry("Covering", "CPD", "Segment-wise Intersection over Union (IoU) weighted by segment duration"),
@@ -297,17 +207,35 @@ DATASET_ENTRIES: Sequence[DatasetEntry] = (
 
 
 def build_algo_table(runtime_detectors: dict) -> str:
-    """Return a table of detectors exposed by the running app.
+    """HTML table of the detectors exposed by the running app.
 
-    Curated entries supply metadata, while the runtime registry decides which
-    algorithms exist. New detectors without an entry still appear in the table.
+    The runtime registry decides which detectors exist; their placement,
+    complexity and documentation page come from the taxonomy of the
+    documentation (``src/taxonomy.py``), licence and source from
+    ``ALGO_ENTRIES``. Rows follow the taxonomy: task, then search procedure.
     """
+    from html import escape
+
+    from . import taxonomy as tx
+
+    order = list(tx.SEARCHES)
+
+    def key(item):
+        name, info = item
+        m = tx.method(info.cls.__name__)
+        task = 0 if info.detector_type == "change_point_detection" else 1
+        search = order.index(m["search"]) if m else len(order)
+        return task, search, tx.display_name(info.cls.__name__, name).lower()
+
     rows: list[str] = []
-    for name, info in sorted(runtime_detectors.items(), key=lambda item: item[0].lower()):
+    for name, info in sorted(runtime_detectors.items(), key=key):
+        cls_name = info.cls.__name__
+        m = tx.method(cls_name)
         a = get_algo_entry(name)
-        task = "CPD" if info.detector_type == "change_point_detection" else "SD"
-        search, compared = TAXONOMY.get(name, ("Other", "—"))
-        complexity = get_complexity(name)
+        is_cpd = info.detector_type == "change_point_detection"
+        task = '<span class="ts-tag is-cpd">CPD</span>' if is_cpd else '<span class="ts-tag is-sd">SD</span>'
+        search, criterion = tx.placement(cls_name) or ("—", "—")
+        complexity = tx.complexity_html(cls_name) or "—"
         license_name = a.license if a else "—"
         source_label = a.source if a and a.source != "—" else "tsseg"
         if name == "AutoPlait":
@@ -316,57 +244,76 @@ def build_algo_table(runtime_detectors: dict) -> str:
         if not source_url:
             module_path = info.cls.__module__.replace(".", "/")
             source_url = f"https://github.com/fchavelli/tsseg/blob/main/{module_path}.py"
-        doc_slug = DOC_SLUGS.get(name, name.lower())
-        doc_url = f"https://fchavelli.github.io/tsseg/detectors/{doc_slug}.html"
-        complexity_text = f"${complexity}$" if complexity and complexity not in ("-", "—") else "—"
-        rows.append(
-            f"| [{name}]({doc_url}) | {task} | {search} | {compared} | "
-            f"{complexity_text} | {license_name} | [{source_label}]({source_url}) |"
+        doc = tx.doc_url(m["page"]) if m else tx.DOCS_URL + "detectors/index.html"
+        label = escape(tx.display_name(cls_name, name))
+        where = (
+            f'<a class="ts-grid-link" href="{tx.taxonomy_link(cls_name)}" target="_blank" rel="noopener" '
+            f'title="Show it in the taxonomy of the documentation">{escape(search)}</a>'
+            if m
+            else escape(search)
         )
-
-    header = (
-        "| Algorithm | Task | Search strategy | Compared | Complexity | License | Source |\n"
-        "|-----------|------|-----------------|----------|------------|---------|--------|\n"
+        rows.append(
+            "<tr>"
+            f'<td><a href="{doc}" target="_blank" rel="noopener"><b>{label}</b></a>'
+            f"<code>{escape(cls_name)}</code></td>"
+            f"<td>{task}</td><td>{where}</td><td>{escape(criterion)}</td>"
+            f'<td class="ts-cx">{complexity}</td><td>{escape(license_name)}</td>'
+            f'<td><a href="{source_url}" target="_blank" rel="noopener">{escape(source_label)}</a></td>'
+            "</tr>"
+        )
+    head = (
+        "<thead><tr><th>Detector</th><th>Task</th><th>Search procedure</th>"
+        f"<th>Homogeneity criterion</th><th>Complexity {COMPLEXITY_HELP_HTML}</th>"
+        "<th>Licence</th><th>Source</th></tr></thead>"
     )
-    return header + "\n".join(rows)
+    return f'<div class="ts-table-wrap"><table class="ts-table">{head}<tbody>{"".join(rows)}</tbody></table></div>'
 
 
 def build_metric_table() -> str:
-    rows: list[str] = []
-    for m in METRIC_ENTRIES:
-        rows.append(f"| {m.name} | {m.task} | {m.description} |")
-    header = "| Metric | Task | Description |\n|--------|------|-------------|\n"
-    return header + "\n".join(rows)
+    from html import escape
+
+    rows = "".join(
+        f"<tr><td><b>{escape(m.name)}</b></td>"
+        f'<td><span class="ts-tag {"is-cpd" if m.task == "CPD" else "is-sd"}">{m.task}</span></td>'
+        f"<td>{escape(m.description)}</td></tr>"
+        for m in METRIC_ENTRIES
+    )
+    head = "<thead><tr><th>Metric</th><th>Task</th><th>Description</th></tr></thead>"
+    return f'<div class="ts-table-wrap"><table class="ts-table">{head}<tbody>{rows}</tbody></table></div>'
 
 
 def build_dataset_table() -> str:
-    rows: list[str] = []
-    for d in DATASET_ENTRIES:
-        rows.append(f"| {d.name} | {d.dtype} | {d.description} | {d.dimensions} | {d.segments} | {d.source} |")
-    header = (
-        "| Dataset | Type | Description | Dimensions | Segments | Source |\n"
-        "|---------|------|-------------|------------|----------|--------|\n"
+    import re
+    from html import escape
+
+    def link(md: str) -> str:
+        m = re.fullmatch(r"\[(.+)\]\((.+)\)", md)
+        return f'<a href="{m[2]}" target="_blank" rel="noopener">{escape(m[1])}</a>' if m else escape(md)
+
+    rows = "".join(
+        f"<tr><td><b>{escape(d.name)}</b></td><td>{escape(d.dtype)}</td><td>{escape(d.description)}</td>"
+        f"<td>{escape(d.dimensions)}</td><td>{escape(d.segments)}</td><td>{link(d.source)}</td></tr>"
+        for d in DATASET_ENTRIES
     )
-    return header + "\n".join(rows)
+    head = (
+        "<thead><tr><th>Dataset</th><th>Type</th><th>Description</th><th>Channels</th>"
+        "<th>Segments</th><th>Source</th></tr></thead>"
+    )
+    return f'<div class="ts-table-wrap"><table class="ts-table">{head}<tbody>{rows}</tbody></table></div>'
 
 
-DISCLAIMER_MD = (
-    "> **⚠️ Disclaimer:** Some algorithms were adapted from research paper artifacts "
-    'published without an explicit license (marked "—" above). These are provided '
-    "for **research and educational purposes only**. If you are the author of one of "
-    "these works and wish to specify licensing terms, please "
-    "[open an issue](https://github.com/fchavelli/tsseg/issues)."
+DISCLAIMER_HTML = (
+    '<p class="ts-note"><b>Licences.</b> Some detectors are adapted from research code published without '
+    "a licence (marked “—”). They are provided for research and educational purposes only. If you are the "
+    "author of one of these works and wish to specify licensing terms, please "
+    '<a href="https://github.com/fchavelli/tsseg/issues" target="_blank" rel="noopener">open an issue</a>.</p>'
 )
 
-MOCAP_NOTE_MD = (
-    "> The sample dataset uses data from the **CMU Graphics Lab Motion Capture Database** "
-    "(NSF EIA-0196217). Labels were sourced from Time2State (Wang et al., 2023). "
-    "Only the first rotation axis of left/right humerus and femur is kept, following "
-    "the protocol of AutoPlait (Matsubara et al., 2014)."
+MOCAP_NOTE_HTML = (
+    '<p class="ts-note">The sample dataset uses data from the <b>CMU Graphics Lab Motion Capture Database</b> '
+    "(NSF EIA-0196217). Labels were sourced from Time2State (Wang et al., 2023). Only the first rotation axis "
+    "of the left and right humerus and femur is kept, following the protocol of AutoPlait (Matsubara et al., "
+    '2014). Built with <a href="https://gradio.app" target="_blank" rel="noopener">Gradio</a>, powered '
+    'by <a href="https://github.com/fchavelli/tsseg" target="_blank" rel="noopener">tsseg</a> '
+    '(<a href="https://github.com/fchavelli/tsseg/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a>).</p>'
 )
-
-LINKS_MD = """- [tsseg Documentation](https://fchavelli.github.io/tsseg/)
-- [GitHub Repository](https://github.com/fchavelli/tsseg)
-- [License: AGPLv3](https://github.com/fchavelli/tsseg/blob/main/LICENSE)
-
-Built with [Gradio](https://gradio.app) · Powered by [tsseg](https://github.com/fchavelli/tsseg)"""

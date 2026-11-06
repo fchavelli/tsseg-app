@@ -1,0 +1,30 @@
+<!-- The two tasks, as on the home page of the documentation (loaded by src/home.py) -->
+<div class="ts-section"><span class="ts-kicker">Two tasks</span>
+<p class="ts-h2">Two questions about one series</p>
+<p class="ts-lead">Every detector answers one of them; state detectors answer both, since a change of state is a change point.</p></div>
+<div class="ts-tasks">
+  <div class="ts-task is-cpd">
+    <span class="ts-task-label">Change point detection</span>
+    <h3>Where does the behaviour change?</h3>
+    <svg viewBox="0 0 240 70" aria-hidden="true">
+      <path class="mini-cp" d="M65 10V64M127 10V64M177 10V64"/>
+      <path class="mini-tri" d="M60 2h10l-5 7zM122 2h10l-5 7zM172 2h10l-5 7z"/>
+      <path class="mini-line" d="M4 50Q10 46 16 51T28 50T40 49T52 51T64 50L66 26Q72 22 78 27T90 26T102 25T114 27T126 26L128 46Q134 42 140 47T152 46T164 45T176 47L178 24Q184 20 190 25T202 24T214 23T226 25T236 24"/>
+    </svg>
+    <p>The detector returns the sorted indices where a new segment starts. Scored by F1, Covering,
+      Gaussian F1 and Hausdorff distance.</p>
+  </div>
+  <div class="ts-task is-sd">
+    <span class="ts-task-label">State detection</span>
+    <h3>Which recurring state is each point in?</h3>
+    <svg viewBox="0 0 240 70" aria-hidden="true">
+      <path class="mini-line" d="M4 34Q10 30 16 35T28 34T40 33T52 35T64 34L66 10Q72 6 78 11T90 10T102 9T114 11T126 10L128 30Q134 26 140 31T152 30T164 29T176 31L178 8Q184 4 190 9T202 8T214 7T226 9T236 8"/>
+      <rect class="mini-a" x="4" y="50" width="60" height="16" rx="4"/><text class="mini-txt" x="34" y="61.5" text-anchor="middle">A</text>
+      <rect class="mini-b" x="66" y="50" width="60" height="16" rx="4"/><text class="mini-txt" x="96" y="61.5" text-anchor="middle">B</text>
+      <rect class="mini-a" x="128" y="50" width="48" height="16" rx="4"/><text class="mini-txt" x="152" y="61.5" text-anchor="middle">A</text>
+      <rect class="mini-b" x="178" y="50" width="58" height="16" rx="4"/><text class="mini-txt" x="207" y="61.5" text-anchor="middle">B</text>
+    </svg>
+    <p>The detector returns one label per time point, and a state can come back. Scored by ARI, NMI,
+      their weighted versions and the State Matching Score.</p>
+  </div>
+</div>

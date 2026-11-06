@@ -1,0 +1,819 @@
+{
+ "source": "tsseg docs/_ext/tsseg_taxonomy.py (scripts/sync_taxonomy.py)",
+ "searches": [
+  {
+   "key": "profile",
+   "task": "cpd",
+   "name": "Profile + peaks",
+   "short": "A score at every time point, computed once; change points at its peaks.",
+   "long": "The series is scanned once to compute a score at every time point: the discrepancy between two adjacent windows, a novelty score, or how many nearest-neighbour arcs cross the point. Change points are placed at the peaks of this profile, above a threshold or the highest ones."
+  },
+  {
+   "key": "bottomup",
+   "task": "cpd",
+   "name": "Bottom-up",
+   "short": "From a fine partition, merge the most similar adjacent segments.",
+   "long": "Start from many small segments and repeatedly merge the two adjacent segments whose union costs least, until the next merge costs more than a penalty or the requested number of segments is reached."
+  },
+  {
+   "key": "binseg",
+   "task": "cpd",
+   "name": "Binary segmentation",
+   "short": "Top-down: split where the gain is largest, recursively.",
+   "long": "Find the single best split of the series, then search again inside each part. Wild and seeded binary segmentation search random or seeded sub-intervals instead, to recover change points close to each other."
+  },
+  {
+   "key": "convex",
+   "task": "cpd",
+   "name": "Convex relaxation",
+   "short": "ℓ₁ penalty on the jumps of a piecewise fit.",
+   "long": "Fit a piecewise model (level, trend) with an ℓ₁ penalty on its jumps, as in the fused lasso: most jumps are exactly zero, and the others are the change points."
+  },
+  {
+   "key": "optimal",
+   "task": "cpd",
+   "dp": true,
+   "name": "Optimal (DP)",
+   "short": "Exact best segmentation (min over all segmentations).",
+   "long": "Minimise the sum of the segment costs over all segmentations, with a penalty per change point or a fixed number of them, by dynamic programming over the position of the last change point. PELT prunes the candidates that can no longer win."
+  },
+  {
+   "key": "bayes",
+   "task": "cpd",
+   "dp": true,
+   "name": "Bayesian (DP)",
+   "short": "Posterior over segmentations (sum), exact by DP or sampled by MCMC.",
+   "long": "Put a prior on segmentations (product partition, or a left-to-right hidden Markov model) and compute the posterior probability of a change at each point: by the recursion of the optimal search with sums in place of minima, or by Markov chain Monte Carlo."
+  },
+  {
+   "key": "states",
+   "task": "sd",
+   "dp": true,
+   "name": "State sequence (DP)",
+   "short": "A state per step or window, tied to the next one by a transition cost.",
+   "long": "One hidden state per time step (per window in TICC, per block of the reduced series in HDP-HSMM), linked to the next by a transition model or a switching cost. Viterbi, forward–backward or Gibbs sampling runs over the whole sequence, so a state can come back."
+  },
+  {
+   "key": "seggroup",
+   "task": "sd",
+   "name": "Segment, then group",
+   "short": "Change points first, then similar segments share a state.",
+   "long": "Detect change points first, then compare the segments: the segments that are alike receive the same state label."
+  },
+  {
+   "key": "cluster",
+   "task": "sd",
+   "name": "Window clustering",
+   "short": "Each window or point clustered on its own; time order ignored or in features only.",
+   "long": "Each time point or window is labelled by a clustering (k-means, Gaussian or Dirichlet process mixture). Time order is ignored, or enters only the representation, for instance through contrastive pairs of adjacent windows."
+  }
+ ],
+ "criteria": [
+  {
+   "key": "model",
+   "tag": "model",
+   "name": "Model of the observations",
+   "short": "Likelihood or fit of a model (mean, variance, AR, trend, …).",
+   "long": "Two parts differ when a specified model fits them with different parameters: mean, median, covariance, precision graph, regression or autoregression, trend, subspace, local intrinsic dimension."
+  },
+  {
+   "key": "distrib",
+   "tag": "distribution",
+   "name": "Distribution, model-free",
+   "short": "Kernel, energy, Wasserstein, density ratio, classifier or graph.",
+   "long": "Empirical distributions are compared without a parametric model: characteristic kernel, energy distance, isolation kernel, density ratio, a classifier trained to tell the parts apart, or a graph."
+  },
+  {
+   "key": "shapes",
+   "tag": "subsequence shapes",
+   "name": "Subsequence shapes",
+   "short": "Nearest neighbours, classifiers or symbolic patterns of subsequences.",
+   "long": "z-normalised subsequences are compared to their nearest neighbours (matrix-profile arcs, k-NN classifiers) or described by symbolic patterns: two parts differ when their local shapes do."
+  },
+  {
+   "key": "learned",
+   "tag": "learned representation",
+   "name": "Learned representations",
+   "short": "Windows embedded by a trained network.",
+   "long": "A network (autoencoder, contrastive encoder, learned kernel) maps windows to embeddings, and the embeddings are compared."
+  }
+ ],
+ "costs": [
+  {
+   "row": "model",
+   "label": "ℓ₁ ℓ₂ normal linear cosine"
+  },
+  {
+   "row": "distrib",
+   "label": "rbf"
+  }
+ ],
+ "dpNote": "Same dynamic programme over segments: its <b>min</b> gives the best segmentation, its <b>sum</b> the posterior; with recurring states, Viterbi (min) and forward–backward (sum).",
+ "methods": [
+  {
+   "name": "ChangeFinder",
+   "cls": "ChangeFinderDetector",
+   "page": "changefinder",
+   "search": "profile",
+   "row": "model",
+   "approach": "two-stage autoregressive outlier scores",
+   "ref": "Takeuchi & Yamanishi (2006), TKDE",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "SST",
+   "cls": "SSTDetector",
+   "page": "sst",
+   "search": "profile",
+   "row": "model",
+   "approach": "subspaces of past and future Hankel matrices",
+   "ref": "Idé & Tsuda (2007), SDM; Weber & Lenz (2025), IEEE Access",
+   "cx": "nl log l",
+   "cx_html": "O(<i>n</i><i>ℓ</i> log <i>ℓ</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "tGLAD",
+   "cls": "TGLADDetector",
+   "page": "tglad",
+   "search": "profile",
+   "row": "model",
+   "approach": "changes of conditional independence graphs",
+   "ref": "Imani & Shrivastava (2023)",
+   "cx": "d^3 n",
+   "cx_html": "O(<i>d</i><sup>3</sup> <i>n</i>)",
+   "deep": true,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "Window",
+   "cls": "WindowDetector",
+   "page": "window",
+   "search": "profile",
+   "row": "bar",
+   "approach": "sliding-window discrepancy",
+   "ref": "Basseville & Nikiforov (1993)",
+   "cx": "dnl",
+   "cx_html": "O(<i>d</i><i>n</i><i>ℓ</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "iCID",
+   "cls": "ICIDDetector",
+   "page": "icid",
+   "search": "profile",
+   "row": "distrib",
+   "approach": "isolation distributional kernel",
+   "ref": "Cao et al. (2024), JAIR",
+   "cx": "dn + n^2",
+   "cx_html": "O(<i>d</i><i>n</i> + <i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "RuLSIF",
+   "cls": "RuLSIFDetector",
+   "page": "rulsif",
+   "search": "profile",
+   "row": "distrib",
+   "approach": "relative density-ratio estimation",
+   "ref": "Liu et al. (2013), Neural Netw.",
+   "cx": "nb^3",
+   "cx_html": "O(<i>n</i><i>b</i><sup>3</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "FLUSS",
+   "cls": "FLUSSDetector",
+   "page": "fluss",
+   "search": "profile",
+   "row": "shapes",
+   "approach": "arc curve of the matrix profile",
+   "ref": "Gharghabi et al. (2017), ICDM",
+   "cx": "dn^2",
+   "cx_html": "O(<i>d</i><i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "ESPRESSO",
+   "cls": "EspressoDetector",
+   "page": "espresso",
+   "search": "profile",
+   "row": "shapes",
+   "approach": "entropy and shape of the matrix profile",
+   "ref": "Deldari et al. (2020), UbiComp",
+   "cx": "dn^2 log n",
+   "cx_html": "O(<i>d</i><i>n</i><sup>2</sup> log <i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "TIRE",
+   "cls": "TireDetector",
+   "page": "tire",
+   "search": "profile",
+   "row": "learned",
+   "approach": "autoencoder, time-invariant features",
+   "ref": "De Ryck et al. (2021), IEEE TSP",
+   "cx": "dnl",
+   "cx_html": "O(<i>d</i><i>n</i><i>ℓ</i>)",
+   "deep": true,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "TS-CP2",
+   "cls": "TSCP2Detector",
+   "page": "tscp2",
+   "search": "profile",
+   "row": "learned",
+   "approach": "contrastive predictive coding",
+   "ref": "Deldari et al. (2021), WWW",
+   "cx": "dnl",
+   "cx_html": "O(<i>d</i><i>n</i><i>ℓ</i>)",
+   "deep": true,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "BottomUp",
+   "cls": "BottomUpDetector",
+   "page": "bottomup",
+   "search": "bottomup",
+   "row": "bar",
+   "approach": "greedy bottom-up merging",
+   "ref": "Keogh et al. (2001), ICDM",
+   "cx": "dn log n",
+   "cx_html": "O(<i>d</i><i>n</i> log <i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": true
+  },
+  {
+   "name": "E-Agglo",
+   "cls": "EAggloDetector",
+   "page": "eagglo",
+   "search": "bottomup",
+   "row": "distrib",
+   "approach": "agglomerative, energy distance",
+   "ref": "Matteson & James (2014), JASA",
+   "cx": "dn^2",
+   "cx_html": "O(<i>d</i><i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "GGS",
+   "cls": "GreedyGaussianDetector",
+   "page": "ggs",
+   "search": "binseg",
+   "row": "model",
+   "approach": "greedy Gaussian likelihood",
+   "ref": "Hallac et al. (2019), ADAC",
+   "cx": "n_CP d^3 n",
+   "cx_html": "O(<i>n</i><sub>CP</sub> <i>d</i><sup>3</sup> <i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "IGTS",
+   "cls": "InformationGainDetector",
+   "page": "igts",
+   "search": "binseg",
+   "row": "model",
+   "approach": "information gain, top-down",
+   "ref": "Sadri et al. (2017), PMC",
+   "cx": "n_CP^2 dn",
+   "cx_html": "O(<i>n</i><sub>CP</sub><sup>2</sup> <i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "BinSeg",
+   "cls": "BinSegDetector",
+   "page": "binseg",
+   "search": "binseg",
+   "row": "bar",
+   "approach": "greedy top-down splitting",
+   "ref": "Bai (1997); Fryzlewicz (2014)",
+   "cx": "dn log n",
+   "cx_html": "O(<i>d</i><i>n</i> log <i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": true
+  },
+  {
+   "name": "Seeded BS",
+   "cls": "SeededBinSegDetector",
+   "page": "seeded_binseg",
+   "search": "binseg",
+   "row": "bar",
+   "approach": "best split of seeded or wild intervals",
+   "ref": "Kovács et al. (2023), Biometrika; Fryzlewicz (2014), Ann. Stat.",
+   "cx": "dn log n",
+   "cx_html": "O(<i>d</i><i>n</i> log <i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "changeforest",
+   "cls": "ChangeForestDetector",
+   "page": "changeforest",
+   "search": "binseg",
+   "row": "distrib",
+   "approach": "random forest classifier between segments",
+   "ref": "Londschien et al. (2023), JMLR",
+   "cx": null,
+   "cx_html": null,
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "ClaSP",
+   "cls": "ClaspDetector",
+   "page": "clasp",
+   "search": "binseg",
+   "row": "shapes",
+   "approach": "classification score profile",
+   "ref": "Ermshaus et al. (2023), DMKD",
+   "cx": "n_CP dn^2",
+   "cx_html": "O(<i>n</i><sub>CP</sub> <i>d</i><i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "Prophet",
+   "cls": "ProphetDetector",
+   "page": "prophet",
+   "search": "convex",
+   "row": "model",
+   "approach": "trend change points of Prophet",
+   "ref": "Taylor & Letham (2018)",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "AMOC",
+   "cls": "AmocDetector",
+   "page": "amoc",
+   "search": "optimal",
+   "row": "model",
+   "approach": "single best split",
+   "ref": "Killick et al. (2012)",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "PELT",
+   "cls": "PeltDetector",
+   "page": "pelt",
+   "search": "optimal",
+   "row": "bar",
+   "approach": "exact penalised search with pruning",
+   "ref": "Killick et al. (2012), JASA",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": true
+  },
+  {
+   "name": "DynP",
+   "cls": "DynpDetector",
+   "page": "dynp",
+   "search": "optimal",
+   "row": "bar",
+   "approach": "exact dynamic programming",
+   "ref": "Auger & Lawrence (1989)",
+   "cx": "n_CP dn^2",
+   "cx_html": "O(<i>n</i><sub>CP</sub> <i>d</i><i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "KCPD",
+   "cls": "KCPDDetector",
+   "page": "kcpd",
+   "search": "optimal",
+   "row": "distrib",
+   "approach": "kernel change point detection; use PELT or DynP with model=\"rbf\"",
+   "ref": "Arlot, Celisse & Harchaoui (2019), JMLR",
+   "cx": null,
+   "cx_html": null,
+   "deep": false,
+   "status": "deprecated",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "BOCD",
+   "cls": "BOCDDetector",
+   "page": "bocd",
+   "search": "bayes",
+   "row": "model",
+   "approach": "Bayesian run-length posterior (offline run of an online method)",
+   "ref": "Adams & MacKay (2007)",
+   "cx": "dn + n^3",
+   "cx_html": "O(<i>d</i><i>n</i> + <i>n</i><sup>3</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "BEAST",
+   "cls": "BeastDetector",
+   "page": "beast",
+   "search": "bayes",
+   "row": "model",
+   "approach": "Bayesian model averaging of trend and seasonality",
+   "ref": "Zhao et al. (2019), RSE",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "Gaussian HMM",
+   "cls": "GaussianHMMDetector",
+   "page": "gaussian_hmm",
+   "search": "states",
+   "row": "model",
+   "approach": "hidden Markov model fitted by EM",
+   "ref": "Rabiner (1989)",
+   "cx": "n_S n(n_S + d)",
+   "cx_html": "O(<i>n</i><sub>S</sub> <i>n</i>(<i>n</i><sub>S</sub> + <i>d</i>))",
+   "deep": false,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "HDP-HSMM",
+   "cls": "HdpHsmmDetector",
+   "page": "hdp_hsmm",
+   "search": "states",
+   "row": "model",
+   "approach": "Bayesian nonparametric semi-Markov model",
+   "ref": "Johnson & Willsky (2013), JMLR",
+   "cx": "dn + n_S(n_S + d^2)",
+   "cx_html": "O(<i>d</i><i>n</i> + <i>n</i><sub>S</sub>(<i>n</i><sub>S</sub> + <i>d</i><sup>2</sup>))",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "AutoPlait",
+   "cls": "AutoPlaitDetector",
+   "page": "autoplait",
+   "search": "states",
+   "row": "model",
+   "approach": "MDL-based regime mining",
+   "ref": "Matsubara et al. (2014), SIGMOD",
+   "cx": "dn",
+   "cx_html": "O(<i>d</i><i>n</i>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "TICC",
+   "cls": "TiccDetector",
+   "page": "ticc",
+   "search": "states",
+   "row": "model",
+   "approach": "Toeplitz inverse covariance clustering",
+   "ref": "Hallac et al. (2017), KDD",
+   "cx": "n_S(n(dl)^2 + (dl)^3)",
+   "cx_html": "O(<i>n</i><sub>S</sub>(<i>n</i>(<i>d</i><i>ℓ</i>)<sup>2</sup> + (<i>d</i><i>ℓ</i>)<sup>3</sup>))",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "SNLDS",
+   "cls": "SNLDSDetector",
+   "page": "snlds",
+   "search": "states",
+   "row": "learned",
+   "approach": "switching nonlinear dynamical system (experimental)",
+   "ref": "Dong et al. (2020), ICML",
+   "cx": null,
+   "cx_html": null,
+   "deep": true,
+   "status": "tsseg",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "HMM",
+   "cls": "HMMDetector",
+   "page": "hmm",
+   "search": "states",
+   "row": "model",
+   "approach": "univariate hidden Markov model; use Gaussian HMM",
+   "ref": "Rabiner (1989)",
+   "cx": null,
+   "cx_html": null,
+   "deep": false,
+   "status": "deprecated",
+   "bench": false,
+   "typical": false
+  },
+  {
+   "name": "CLaP",
+   "cls": "ClapDetector",
+   "page": "clap",
+   "search": "seggroup",
+   "row": "shapes",
+   "approach": "classification label profile",
+   "ref": "Ermshaus et al. (2024)",
+   "cx": "n_CP n(nd + n_CP log n_CP)",
+   "cx_html": "O(<i>n</i><sub>CP</sub> <i>n</i>(<i>n</i><i>d</i> + <i>n</i><sub>CP</sub> log <i>n</i><sub>CP</sub>))",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "Hidalgo",
+   "cls": "HidalgoDetector",
+   "page": "hidalgo",
+   "search": "cluster",
+   "row": "model",
+   "approach": "local intrinsic dimension",
+   "ref": "Allegra et al. (2020), Sci. Rep.",
+   "cx": "dn^2",
+   "cx_html": "O(<i>d</i><i>n</i><sup>2</sup>)",
+   "deep": false,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "Time2State",
+   "cls": "Time2StateDetector",
+   "page": "time2state",
+   "search": "cluster",
+   "row": "learned",
+   "approach": "contrastive encoder, clustering",
+   "ref": "Wang et al. (2023), SIGMOD",
+   "cx": "dnl",
+   "cx_html": "O(<i>d</i><i>n</i><i>ℓ</i>)",
+   "deep": true,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "E2USD",
+   "cls": "E2USDDetector",
+   "page": "e2usd",
+   "search": "cluster",
+   "row": "learned",
+   "approach": "dual-view embeddings, clustering",
+   "ref": "Lai et al. (2024), WWW",
+   "cx": "dnl log l",
+   "cx_html": "O(<i>d</i><i>n</i><i>ℓ</i> log <i>ℓ</i>)",
+   "deep": true,
+   "status": "tsseg",
+   "bench": true,
+   "typical": false
+  },
+  {
+   "name": "PaTSS",
+   "cls": "PatssDetector",
+   "page": "patss",
+   "search": "cluster",
+   "row": "shapes",
+   "approach": "sequential patterns of SAX words, then clustering",
+   "ref": "Carpentier et al. (2024)",
+   "cx": null,
+   "cx_html": null,
+   "deep": false,
+   "status": "deprecated",
+   "bench": false,
+   "typical": false
+  }
+ ],
+ "literature": [
+  {
+   "name": "MOSUM",
+   "search": "profile",
+   "row": "model",
+   "ref": "Eichinger & Kirch (2018)"
+  },
+  {
+   "name": "subspace ID",
+   "search": "profile",
+   "row": "model",
+   "ref": "Kawahara et al. (2007)"
+  },
+  {
+   "name": "KL-CPD",
+   "search": "profile",
+   "row": "learned",
+   "ref": "Chang et al. (2019)"
+  },
+  {
+   "name": "TGUH",
+   "search": "bottomup",
+   "row": "model",
+   "ref": "Fryzlewicz (2018)"
+  },
+  {
+   "name": "MDL greedy",
+   "search": "bottomup",
+   "row": "model",
+   "ref": "Wu et al. (2024)"
+  },
+  {
+   "name": "NOT",
+   "search": "binseg",
+   "row": "model",
+   "ref": "Baranowski et al. (2019)"
+  },
+  {
+   "name": "Inspect",
+   "search": "binseg",
+   "row": "model",
+   "ref": "Wang & Samworth (2018)"
+  },
+  {
+   "name": "E-Divisive",
+   "search": "binseg",
+   "row": "distrib",
+   "ref": "Matteson & James (2014)"
+  },
+  {
+   "name": "gSeg",
+   "search": "binseg",
+   "row": "distrib",
+   "ref": "Chen & Zhang (2015)"
+  },
+  {
+   "name": "TV Lasso",
+   "search": "convex",
+   "row": "model",
+   "ref": "Harchaoui & Lévy-Leduc (2010)"
+  },
+  {
+   "name": "fast group LARS",
+   "search": "convex",
+   "row": "model",
+   "ref": "Vert & Bleakley (2010)"
+  },
+  {
+   "name": "ℓ₁ trend filtering",
+   "search": "convex",
+   "row": "model",
+   "ref": "Kim et al. (2009)"
+  },
+  {
+   "name": "FPOP / SNIP",
+   "search": "optimal",
+   "row": "model",
+   "ref": "Maidstone et al. (2017)"
+  },
+  {
+   "name": "SMUCE",
+   "search": "optimal",
+   "row": "model",
+   "ref": "Frick et al. (2014)"
+  },
+  {
+   "name": "BOCPDMS",
+   "search": "bayes",
+   "row": "model",
+   "ref": "Knoblauch & Damoulas (2018)"
+  },
+  {
+   "name": "PPM (bcp)",
+   "search": "bayes",
+   "row": "model",
+   "ref": "Barry & Hartigan (1993)"
+  },
+  {
+   "name": "change-point HMM",
+   "search": "bayes",
+   "row": "model",
+   "ref": "Chib (1998)"
+  },
+  {
+   "name": "DPHMM",
+   "search": "bayes",
+   "row": "model",
+   "ref": "Ko et al. (2015)"
+  },
+  {
+   "name": "GP-BOCPD",
+   "search": "bayes",
+   "row": "model",
+   "ref": "Saatçi et al. (2010)"
+  },
+  {
+   "name": "rSLDS",
+   "search": "states",
+   "row": "model",
+   "ref": "Linderman et al. (2017)"
+  },
+  {
+   "name": "sticky HDP-HMM",
+   "search": "states",
+   "row": "model",
+   "ref": "Fox et al. (2011)"
+  },
+  {
+   "name": "BP-AR-HMM",
+   "search": "states",
+   "row": "model",
+   "ref": "Fox et al. (2014)"
+  },
+  {
+   "name": "ClaSP2Feat",
+   "search": "seggroup",
+   "row": "model",
+   "ref": "Ermshaus et al. (2025)"
+  },
+  {
+   "name": "optimal transport",
+   "search": "seggroup",
+   "row": "distrib",
+   "ref": "Cheng et al. (2020)"
+  },
+  {
+   "name": "WK-means",
+   "search": "cluster",
+   "row": "distrib",
+   "ref": "Horvath et al. (2024)"
+  },
+  {
+   "name": "ordinal patterns",
+   "search": "cluster",
+   "row": "shapes",
+   "ref": "Sinn et al. (2013)"
+  }
+ ],
+ "excluded": [
+  {
+   "cls": "RandomDetector",
+   "page": "random",
+   "why": "random baseline for both tasks"
+  }
+ ]
+}
