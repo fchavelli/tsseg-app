@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "AGPLv3"}
 requires-python = ">=3.10"
 authors = [
-    {name = "François Chavelli"},
+    {name = "Félix Chavelli"},
 ]
 
 dependencies = [
