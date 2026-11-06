@@ -83,42 +83,74 @@ class TestAlgorithms:
             assert info.detector_type in ("change_point_detection", "state_detection")
 
     def test_catalogue_tracks_runtime_detectors(self):
-        from src.about_data import TAXONOMY, build_algo_table
+        from src import taxonomy
+        from src.about_data import build_algo_table
         from src.algorithms import get_all_detectors
 
         detectors = get_all_detectors()
         assert {"AutoPlait", "ChangeFinder", "ChangeForest", "GaussianHMM", "RuLSIF", "SeededBinSeg"} <= set(detectors)
         assert "Patss" not in detectors
-        assert set(detectors) <= set(TAXONOMY)
-        rows = build_algo_table(detectors).splitlines()[2:]
-        assert {row.split("|")[1].strip().split("](")[0][1:] for row in rows} == set(detectors)
-        assert all("https://" in row for row in rows)
-        assert any("$O(" in row for row in rows)
-        assert "| Complexity |" in build_algo_table(detectors).splitlines()[0]
+        # every detector of the demo is placed in the taxonomy of the documentation
+        unplaced = {info.cls.__name__ for info in detectors.values()} - set(taxonomy.METHODS)
+        assert unplaced <= {spec["cls"] for spec in taxonomy.SPEC["excluded"]}
+        table = build_algo_table(detectors)
+        assert table.count("<tr>") == len(detectors) + 1
+        assert all(info.cls.__name__ in table for info in detectors.values())
+        assert "Optimal (DP)" in table and "Model or distribution, by cost" in table
+        assert "O(<i>d</i>" in table
+
+    def test_taxonomy_follows_the_documentation(self):
+        from src import taxonomy
+
+        assert taxonomy.placement("PeltDetector") == ("Optimal (DP)", "Model or distribution, by cost")
+        assert taxonomy.placement("ClapDetector") == ("Segment, then group", "Subsequence shapes")
+        assert taxonomy.display_name("GreedyGaussianDetector", "GreedyGaussian") == "GGS"
+        assert taxonomy.complexity_html("PeltDetector").endswith("*")
+        data = taxonomy.taxonomy_data()
+        assert {s["key"] for s in data["searches"]} == set(taxonomy.SEARCHES)
+        pelt = next(m for m in data["methods"] if m["id"] == "PeltDetector")
+        assert pelt["url"] == "https://fchavelli.github.io/tsseg/detectors/pelt.html"
+        assert pelt["rows"] == ["model", "distrib"] and pelt["bar"]
+        from tsseg.algorithms import PeltDetector
+
+        # capabilities come from the estimator tags, as in the documentation
+        assert pelt["unsup"] is PeltDetector.get_class_tag("capability:unsupervised")
+        assert pelt["guided"] is PeltDetector.get_class_tag("capability:semi_supervised")
+        html = taxonomy.taxonomy_html()
+        assert 'id="tsseg-taxonomy"' in html and 'id="tsseg-taxonomy-data"' in html
+        assert "</script" not in html[html.index("tsseg-taxonomy-data") : -len("</script>")]
+
+    def test_vendored_taxonomy_opens_links_in_a_new_tab(self):
+        from src.style import build_head
+
+        head = build_head()
+        assert "window.__tssegTaxonomy" in head
+        assert "window.location.href" not in head
+        assert 'window.open(on[0].url, "_blank", "noopener")' in head
 
     def test_task_menu_marks_state_detectors_in_cpd(self):
         from app import _get_detector_choices
 
         cpd = dict(_get_detector_choices("Change Point Detection"))
         sd = dict(_get_detector_choices("State Detection"))
-        assert "GaussianHMM [SD]" in cpd
-        assert cpd["GaussianHMM [SD]"] == "GaussianHMM"
-        assert "GaussianHMM" in sd
-        assert "Pelt" in cpd and "Pelt" not in sd
+        assert "Gaussian HMM [SD]" in cpd
+        assert cpd["Gaussian HMM [SD]"] == "GaussianHMM"
+        assert "Gaussian HMM" in sd
+        assert "PELT" in cpd and "PELT" not in sd
+        assert cpd["PELT"] == "Pelt"
 
     def test_tooltip_and_menu_legend_are_rendered(self):
         import app
         from src.about_data import COMPLEXITY_HELP_HTML
 
         ui = app.create_app()
-        about = next(
-            component
-            for component in ui.config["components"]
-            if component["type"] == "markdown" and "#### About tsseg-app" in str(component["props"].get("value"))
-        )
-        assert COMPLEXITY_HELP_HTML in about["props"]["value"]
-        assert about["props"]["sanitize_html"] is False
+        html = [str(c["props"].get("value")) for c in ui.config["components"] if c["type"] == "html"]
+        about = next(v for v in html if "detectors in this demo" in v)
+        assert COMPLEXITY_HELP_HTML in about
+        assert any('id="tsseg-taxonomy"' in v for v in html)
         assert ".complexity-help:hover .complexity-tooltip" in app.APP_CSS
+        meta = app.detector_meta_html(app._get_all_detector_choices()["Pelt"])
+        assert "PELT" in meta and "Optimal (DP)" in meta and COMPLEXITY_HELP_HTML in meta
         update_detectors = next(
             item.fn for item in ui.fns.values() if item.fn and item.fn.__name__ == "update_detectors"
         )
@@ -379,3 +411,20 @@ class TestPlotting:
         color_map = build_segment_color_map(2, 1)
         fig = make_annotation_figure(signal, cps, states, "Test", color_map)
         assert fig is not None
+
+    def test_comparison_titles_sit_above_their_rows(self):
+        from src.plotting import build_segment_color_map, make_comparison_figure, make_multi_comparison_figure
+
+        signal = np.random.default_rng(0).normal(size=(300, 2))
+        truth = np.array([0] * 100 + [1] * 100 + [0] * 100)
+        fig = make_comparison_figure(
+            signal, truth, [100, 200], None, [120], build_segment_color_map(2, 2), task="change_point_detection"
+        )
+        titles = [a for a in fig.layout.annotations if a.xref == "paper"]
+        assert [t.text.split("</b>")[0] for t in titles] == ["<b>Ground truth", "<b>Prediction"]
+        assert titles[0].y > titles[1].y
+        # state letters are drawn on the bands of the truth
+        assert {a.text for a in fig.layout.annotations if a.xref != "paper"} == {"<b>A</b>", "<b>B</b>"}
+        runs = [{"name": "1. PELT", "pred_states": None, "pred_cps": [150], "task": "change_point_detection"}]
+        multi = make_multi_comparison_figure(signal, runs, truth, [100, 200])
+        assert len([a for a in multi.layout.annotations if a.xref == "paper"]) == 2

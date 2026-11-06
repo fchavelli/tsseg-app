@@ -30,8 +30,8 @@ class DetectorInfo:
     detector_type: DetectorType
     tags: dict[str, Any] = field(default_factory=dict)
     description: str = ""
-    category: str = ""
-    complexity: str = ""  # Big-O complexity string (math, no $)
+    display_name: str = ""  # name used by the documentation ("PELT", "Gaussian HMM")
+    complexity: str = ""  # time complexity as HTML, from the taxonomy of the documentation
 
     @property
     def dependencies(self) -> list[str]:
@@ -60,41 +60,6 @@ class DetectorInfo:
             suffix = f"  ({'·'.join(extras)})"
         task = "CPD" if self.detector_type == "change_point_detection" else "SD"
         return f"{self.name} [{task}]{suffix}"
-
-
-# -- Detector category heuristics based on module path / name --
-# Fallback used only when the algorithm isn't found in about_data.ALGO_BY_NAME.
-_CATEGORY_MAP = {
-    "vsax": "Subsequence-based",
-    "changefinder": "Distribution-based",
-    "snlds": "Decomposed",
-    "patss": "Subsequence-based",
-    "vqtss": "Decomposed",
-    "random": "Baseline",
-}
-
-
-def _infer_category(name: str) -> str:
-    """Infer algorithm family.
-
-    Primary source is ``src.about_data.ALGO_BY_NAME`` (curated families).
-    Falls back to ``_CATEGORY_MAP`` for detectors not listed there.
-    """
-    short = _strip_detector_suffix(name)
-    # Local import to avoid a circular dependency at module load time.
-    try:
-        from .about_data import get_algo_entry
-
-        entry = get_algo_entry(short)
-        if entry is not None:
-            return entry.family
-    except Exception:
-        pass
-    name_lower = short.lower()
-    for key, cat in _CATEGORY_MAP.items():
-        if key in name_lower:
-            return cat
-    return "Other"
 
 
 # Detectors that cannot run in the app's deployment environment.
@@ -202,7 +167,7 @@ def _iter_exported_detectors() -> Iterable[Tuple[str, type]]:
 
 def get_all_detectors() -> Dict[str, DetectorInfo]:
     """Return all detectors with metadata (excluding broken/unavailable ones)."""
-    from .about_data import get_complexity
+    from . import taxonomy
 
     results: Dict[str, DetectorInfo] = {}
     for name, cls in _iter_exported_detectors():
@@ -212,14 +177,13 @@ def get_all_detectors() -> Dict[str, DetectorInfo]:
         tags = getattr(cls, "_tags", {}) or {}
         detector_type = tags.get("detector_type", "unknown")
         short_name = _strip_detector_suffix(name)
-        complexity = get_complexity(short_name)
         info = DetectorInfo(
             name=short_name,
             cls=cls,
             detector_type=detector_type,
             tags=tags,
-            category=_infer_category(name),
-            complexity=complexity,
+            display_name=taxonomy.display_name(name, short_name),
+            complexity=taxonomy.complexity_html(name),
         )
         results[short_name] = info
     return results

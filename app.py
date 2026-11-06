@@ -30,6 +30,14 @@ from src.data import (
     load_csv,
     load_mocap_dataset,
 )
+from src.home import (
+    header_html,
+    hero_art_html,
+    hero_text_html,
+    home_body_html,
+    stats_html,
+    tab_head_html,
+)
 from src.metrics import compute_metrics, get_metrics_for_task, summarize_sms_errors
 from src.params import (
     apply_sentinel_translations,
@@ -46,6 +54,8 @@ from src.plotting import (
     make_signal_figure,
     make_sms_breakdown_chart,
 )
+from src.style import APP_CSS, APP_THEME, build_head, taxonomy_css
+from src.taxonomy import taxonomy_html
 from src.utils import (
     align_states_via_hungarian,
     change_points_to_states,
@@ -112,10 +122,42 @@ def _get_detector_choices(task_label: str) -> list[tuple[str, str]]:
         state_detectors = get_detectors_by_type("state_detection")
         detectors.update(state_detectors)
     choices = []
-    for name, info in sorted(detectors.items()):
-        label = f"{name} [SD]" if task == "change_point_detection" and info.detector_type == "state_detection" else name
+    for name, info in sorted(detectors.items(), key=lambda item: item[1].display_name.lower()):
+        label = info.display_name or name
+        if task == "change_point_detection" and info.detector_type == "state_detection":
+            label = f"{label} [SD]"
         choices.append((label, name))
     return choices
+
+
+def detector_meta_html(info: DetectorInfo) -> str:
+    """Name, task, place in the taxonomy of the documentation and complexity."""
+    from html import escape
+
+    from src import taxonomy
+    from src.about_data import COMPLEXITY_HELP_HTML
+
+    cls_name = info.cls.__name__
+    is_sd = info.detector_type == "state_detection"
+    parts = [
+        f"<b>{escape(info.display_name or info.name)}</b>",
+        '<span class="ts-tag is-sd">States</span>' if is_sd else '<span class="ts-tag is-cpd">Change points</span>',
+    ]
+    place = taxonomy.placement(cls_name)
+    if place:
+        parts.append(
+            f'<a class="ts-tag is-place" href="{taxonomy.taxonomy_link(cls_name)}" target="_blank" rel="noopener" '
+            f'title="Search procedure · homogeneity criterion, in the taxonomy of the documentation">'
+            f"{escape(place[0])} · {escape(place[1])}</a>"
+        )
+    if info.complexity:
+        parts.append(
+            f'<span class="ts-nowrap"><span class="ts-cx">{info.complexity}</span>{COMPLEXITY_HELP_HTML}</span>'
+        )
+    m = taxonomy.method(cls_name)
+    if m:
+        parts.append(f'<a href="{taxonomy.doc_url(m["page"])}" target="_blank" rel="noopener">Docs ↗</a>')
+    return f'<div class="ts-meta">{"".join(parts)}</div>'
 
 
 def _get_all_detector_choices() -> dict[str, DetectorInfo]:
@@ -150,86 +192,6 @@ def _run_detector(
 
 
 # ============================================================================
-# Theme & Style
-# ============================================================================
-
-APP_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; }
-.gradio-container { max-width: 1600px !important; }
-.main-header { text-align: center; margin-bottom: 0.3em; }
-.main-header h1 { font-weight: 600; font-size: 1.6em; letter-spacing: -0.02em; color: #1a1a2e; }
-.main-header p { color: #555; font-weight: 300; font-size: 0.95em; }
-.main-header a { color: #3b5998; text-decoration: none; font-weight: 400; }
-.main-header a:hover { text-decoration: underline; }
-.run-btn { min-height: 40px !important; font-weight: 500 !important; }
-.param-section { max-height: 55vh; overflow-y: auto; padding-right: 4px; }
-footer { display: none !important; }
-.complexity-help {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 0.9rem;
-    height: 0.9rem;
-    margin-left: 0.2rem;
-    border-radius: 50%;
-    background: #3b5998;
-    color: #fff;
-    font-size: 0.68rem;
-    font-weight: 700;
-    line-height: 1;
-    vertical-align: baseline;
-    transform: translateY(-0.12em);
-    cursor: help;
-    z-index: 20;
-}
-.complexity-help:hover { background: #274575; }
-.complexity-tooltip {
-    display: none;
-    position: absolute;
-    top: calc(100% + 0.45rem);
-    left: 0;
-    width: min(20rem, 75vw);
-    padding: 0.65rem 0.75rem;
-    border-radius: 0.4rem;
-    background: #1f2937;
-    color: #fff;
-    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
-    font-size: 0.78rem;
-    font-weight: 400;
-    line-height: 1.45;
-    text-align: left;
-    white-space: normal;
-    z-index: 100;
-    pointer-events: none;
-}
-.complexity-help:hover .complexity-tooltip,
-.complexity-help:focus .complexity-tooltip { display: block; }
-.detector-meta { position: relative; overflow: visible !important; padding-top: 0.25rem; }
-.detector-meta p { overflow: visible !important; line-height: 1.7; }
-.sms-breakdown { background: transparent !important; border: 0 !important; box-shadow: none !important; }
-"""
-
-APP_THEME = gr.themes.Base(
-    primary_hue=gr.themes.colors.slate,
-    secondary_hue=gr.themes.colors.blue,
-    neutral_hue=gr.themes.colors.gray,
-    font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
-    font_mono=[gr.themes.GoogleFont("JetBrains Mono"), "ui-monospace", "monospace"],
-).set(
-    button_primary_background_fill="#2d3748",
-    button_primary_background_fill_hover="#4a5568",
-    button_primary_text_color="#ffffff",
-    button_secondary_background_fill="#edf2f7",
-    button_secondary_background_fill_hover="#e2e8f0",
-    button_secondary_text_color="#2d3748",
-    block_title_text_weight="500",
-    block_label_text_weight="400",
-)
-
-
-# ============================================================================
 # Main Gradio App
 # ============================================================================
 
@@ -238,7 +200,7 @@ def create_app() -> gr.Blocks:
     all_detectors = _get_all_detector_choices()
 
     with gr.Blocks(
-        title="tsseg — Time Series Segmentation",
+        title="tsseg demo: time series segmentation",
     ) as app:
         # -- Shared state --
         data_state = gr.State(value=None)  # TimeSeriesData
@@ -247,82 +209,42 @@ def create_app() -> gr.Blocks:
         last_run_state = gr.State(value=None)  # last run result dict (for add-to-comparison)
 
         # -- Header --
-        gr.Markdown(
-            f"""
-            # tsseg — Time Series Segmentation
-            Segment time series with {len(all_detectors)} algorithms. Upload data or use built-in datasets,
-            compare results, evaluate with standard metrics.
+        n_metrics = len(get_metrics_for_task("change_point_detection")) + len(get_metrics_for_task("state_detection"))
+        gr.HTML(header_html(), apply_default_css=False, elem_classes="ts-html")
 
-            <p style="text-align:center; margin-top:2px">
-                <a href="https://fchavelli.github.io/tsseg/" target="_blank">Documentation</a> &nbsp;·&nbsp;
-                <a href="https://github.com/fchavelli/tsseg" target="_blank">GitHub</a>
-            </p>
-            """,
-            elem_classes="main-header",
-        )
-
-        with gr.Tabs():
+        with gr.Tabs(elem_classes="ts-tabs") as tabs:
             # ==================================================================
             # TAB 0 — HOME / WELCOME
             # ==================================================================
             with gr.Tab("Home", id="tab_home"):
-                with gr.Row():
-                    with gr.Column(scale=1, min_width=180):
-                        gr.Image(
-                            value="assets/logo.png",
-                            show_label=False,
-                            container=False,
-                            height=160,
-                            interactive=False,
-                        )
-                    with gr.Column(scale=4):
-                        gr.Markdown(
-                            f"""
-### Welcome to **tsseg**
-
-**tsseg** is an open-source research project on **time series segmentation**,
-unifying two complementary tasks under a single API:
-
-- **Change Point Detection (CPD)** — locate the times at which the
-  underlying generative process changes.
-- **State Detection (SD)** — additionally label every timestamp with a
-  recurring state.
-
-The project bundles together:
-
-- a **Python library** — [`tsseg`](https://github.com/fchavelli/tsseg) —
-  exposing {len(all_detectors)} algorithms in this demo behind a common scikit-learn / aeon-style interface;
-- this interactive **demo** (where you are);
-- companion **research papers** describing the unified API and benchmark
-  protocol (currently in review).
-                            """
-                        )
-                gr.Markdown(
-                    """
-#### How to use this demo
-
-1. Open the **Data** tab and load the sample dataset, generate a synthetic
-   series, or upload your own CSV.
-2. Move to **Segmentation**, pick an algorithm and tune its parameters
-   (use the *Use GT* button when available to reuse the true number of
-   change points / states).
-3. Add several runs to the **Comparison** view and finally score them in
-   **Evaluation**.
-                    """
-                )
-                gr.Image(
-                    value="assets/demo.png",
-                    show_label=False,
-                    container=False,
-                    height=320,
-                    interactive=False,
+                with gr.Row(equal_height=False, elem_classes="ts-hero-row"):
+                    with gr.Column(scale=11, min_width=320):
+                        gr.HTML(hero_text_html(len(all_detectors)), apply_default_css=False, elem_classes="ts-html")
+                        with gr.Row(elem_classes="ts-hero-actions"):
+                            start_btn = gr.Button("Get started  →", variant="primary", size="lg")
+                            sample_btn = gr.Button("Segment the sample dataset", variant="secondary", size="lg")
+                    with gr.Column(scale=9, min_width=320):
+                        gr.HTML(hero_art_html(), apply_default_css=False, elem_classes="ts-html")
+                gr.HTML(
+                    stats_html(len(all_detectors), n_metrics) + home_body_html(),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
                 )
 
             # ==================================================================
             # TAB 1 — DATA
             # ==================================================================
             with gr.Tab("Data", id="tab_data"):
-                gr.Markdown("#### Load or generate a time series")
+                gr.HTML(
+                    tab_head_html(
+                        "Step 1 · Data",
+                        "Load a series",
+                        "A labelled motion-capture recording, a synthetic series with recurring states, or your own "
+                        "CSV. Channels are z-normalised before segmentation.",
+                    ),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
 
                 with gr.Row():
                     with gr.Column(scale=1, min_width=280):
@@ -560,10 +482,20 @@ The project bundles together:
             # TAB 2 — SEGMENTATION (landscape: controls left, results right)
             # ==================================================================
             with gr.Tab("Segmentation", id="tab_seg"):
+                gr.HTML(
+                    tab_head_html(
+                        "Step 2 · Segmentation",
+                        "Run a detector",
+                        "Change point detection returns where the behaviour changes; state detection also says which "
+                        "recurring state each point is in. <i>Use GT</i> passes the true number of change points or "
+                        "states (guided mode); most detectors can also find it themselves.",
+                    ),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
                 with gr.Row(equal_height=False):
                     # -- LEFT: algorithm selection + parameters --
                     with gr.Column(scale=1, min_width=320):
-                        gr.Markdown("#### Algorithm")
                         task_selector = gr.Radio(
                             choices=list(TASK_LABELS.keys()),
                             value="Change Point Detection",
@@ -600,24 +532,11 @@ The project bundles together:
 
                             info = all_detectors[detector_name]
 
-                            task_type = "State Detection" if info.detector_type == "state_detection" else "CPD"
-
-                            # --- Detector metadata and mathematical complexity ---
-                            from src.about_data import (
-                                COMPLEXITY_HELP_HTML,
-                                LATEX_DELIMITERS,
-                                TAXONOMY,
-                            )
-
-                            complexity_html = ""
-                            if info.complexity and info.complexity not in ("-", "—"):
-                                complexity_html = f" · ${info.complexity}${COMPLEXITY_HELP_HTML}"
-                            search, compared = TAXONOMY.get(detector_name, ("Other", "—"))
-                            gr.Markdown(
-                                f"**{detector_name}** · {task_type} · {search} / {compared}{complexity_html}",
-                                latex_delimiters=LATEX_DELIMITERS,
-                                sanitize_html=False,
-                                elem_classes="detector-meta",
+                            # --- Detector: task, place in the taxonomy, complexity ---
+                            gr.HTML(
+                                detector_meta_html(info),
+                                apply_default_css=False,
+                                elem_classes=["detector-meta", "ts-html"],
                             )
 
                             param_infos = get_param_info(info.cls, data_ctx=data_ctx)
@@ -850,16 +769,17 @@ The project bundles together:
                                     )
 
                                     n_cps = len(pred_cps) if pred_cps else 0
-                                    n_st = int(np.max(pred_states) + 1) if pred_states is not None else "—"
-                                    result_md = (
-                                        f"**{detector_name}** — {elapsed:.2f}s — {n_cps} change points, {n_st} states"
-                                    )
+                                    found = f"{n_cps} change point{'s' if n_cps != 1 else ''}"
+                                    if pred_states is not None:
+                                        n_st = len(np.unique(pred_states))
+                                        found += f", {n_st} state{'s' if n_st != 1 else ''}"
+                                    result_md = f"**{info.display_name or detector_name}** · {elapsed:.2f} s · {found}"
                                     if v_warnings:
                                         result_md += "\n\n⚠️ " + " · ".join(v_warnings)
 
                                     # Store result for add-to-comparison
                                     last_run = {
-                                        "name": detector_name,
+                                        "name": info.display_name or detector_name,
                                         "params": {k: str(v) for k, v in params.items()},
                                         "pred_states": pred_states.tolist() if pred_states is not None else None,
                                         "pred_cps": pred_cps if pred_cps else [],
@@ -940,7 +860,15 @@ The project bundles together:
             # TAB 3 — COMPARISON
             # ==================================================================
             with gr.Tab("Comparison", id="tab_compare"):
-                gr.Markdown("#### Compare algorithm runs")
+                gr.HTML(
+                    tab_head_html(
+                        "Step 3 · Comparison",
+                        "Compare runs",
+                        "Every run added from the Segmentation tab, one row each, under the ground truth.",
+                    ),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
 
                 with gr.Row():
                     refresh_compare_btn = gr.Button("Refresh", variant="primary")
@@ -1009,7 +937,16 @@ The project bundles together:
             # TAB 4 — EVALUATION
             # ==================================================================
             with gr.Tab("Evaluation", id="tab_eval"):
-                gr.Markdown("#### Evaluate results with standard metrics")
+                gr.HTML(
+                    tab_head_html(
+                        "Step 4 · Evaluation",
+                        "Score the runs",
+                        "Change point metrics compare the boundaries; state metrics compare the labels, up to a "
+                        "renaming of the states. The State Matching Score also names each error.",
+                    ),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
 
                 with gr.Row():
                     with gr.Column(scale=1, min_width=280):
@@ -1196,9 +1133,28 @@ The project bundles together:
             # ==================================================================
             # TAB 5 — TUTORIAL
             # ==================================================================
+            with gr.Tab("Taxonomy", id="tab_taxonomy"):
+                gr.HTML(
+                    tab_head_html(
+                        "Find the right method",
+                        "Taxonomy of the detectors",
+                        "Every detector of tsseg, placed by <b>how it searches</b> for a segmentation (columns) and by "
+                        "<b>what makes a segment homogeneous</b> (rows), as in the "
+                        '<a href="https://fchavelli.github.io/tsseg/taxonomy.html" target="_blank" rel="noopener">'
+                        "documentation</a> and the TSB-SEG benchmark. Hover a method for its card, click it for its "
+                        "page. TS-CP2 and SNLDS (TensorFlow) and PaTSS are not available in this demo.",
+                    ),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
+                gr.HTML(taxonomy_html(), apply_default_css=False, elem_classes=["ts-html", "ts-taxonomy-wrap"])
+
             with gr.Tab("Tutorial", id="tab_tutorial"):
-                gr.Markdown("#### App Tutorial")
-                gr.Markdown("Check out this quick video walkthrough of the app features and usage tips!")
+                gr.HTML(
+                    tab_head_html("Tutorial", "A tour of the demo", "A short video of the four steps."),
+                    apply_default_css=False,
+                    elem_classes="ts-html",
+                )
                 gr.Video(value="assets/tutorial.mp4", label="tsseg Tutorial", autoplay=False, loop=False)
 
             # ==================================================================
@@ -1206,66 +1162,42 @@ The project bundles together:
             # ==================================================================
             with gr.Tab("About", id="tab_about"):
                 from src.about_data import (
-                    COMPLEXITY_HELP_HTML,
-                    DISCLAIMER_MD,
-                    LATEX_DELIMITERS,
-                    LINKS_MD,
-                    MOCAP_NOTE_MD,
+                    DISCLAIMER_HTML,
+                    MOCAP_NOTE_HTML,
                     build_algo_table,
                     build_dataset_table,
                     build_metric_table,
                 )
 
-                algo_table = build_algo_table(all_detectors)
-                metric_table = build_metric_table()
-                dataset_table = build_dataset_table()
-
-                gr.Markdown(
-                    f"""
-#### About tsseg-app
-
-**tsseg** is a Python library for **Time Series Segmentation**, covering both
-**Change Point Detection (CPD)** and **State Detection (SD)**.
-This app exposes {len(all_detectors)} algorithms through an interactive interface.
-State detection algorithms are also available under the CPD task, since change points
-can be inferred from detected states.
-
-The taxonomy describes **how** a segmentation is found (search strategy) and
-**what** the method compares. CPD methods assign each segment a new label;
-SD methods can recognise states that recur. Complexity depends on parameters
-and implementation.
-
----
-
-#### Algorithms · Complexity notation {COMPLEXITY_HELP_HTML}
-
-{algo_table}
-
-{DISCLAIMER_MD}
-
----
-
-#### Metrics
-
-{metric_table}
-
----
-
-#### Datasets
-
-{dataset_table}
-
-{MOCAP_NOTE_MD}
-
----
-
-#### Links
-
-{LINKS_MD}
-                """,
-                    latex_delimiters=LATEX_DELIMITERS,
-                    sanitize_html=False,
+                gr.HTML(
+                    tab_head_html(
+                        "About",
+                        f"{len(all_detectors)} detectors in this demo",
+                        "Placed as in the taxonomy of the documentation, with their time complexity, licence and "
+                        "source. State detectors are also offered under change point detection, since a change of "
+                        "state is a change point.",
+                    )
+                    + build_algo_table(all_detectors)
+                    + DISCLAIMER_HTML
+                    + '<div class="ts-section">'
+                    + tab_head_html("Evaluation", "Metrics")
+                    + "</div>"
+                    + build_metric_table()
+                    + '<div class="ts-section">'
+                    + tab_head_html("Data", "Datasets")
+                    + "</div>"
+                    + build_dataset_table()
+                    + MOCAP_NOTE_HTML,
+                    apply_default_css=False,
+                    elem_classes="ts-html",
                 )
+
+        # -- Home buttons --
+        start_btn.click(lambda: gr.Tabs(selected="tab_data"), outputs=tabs)
+        sample_btn.click(
+            load_example,
+            outputs=[data_state, data_ctx_state, data_info, data_plot],
+        ).then(lambda: gr.Tabs(selected="tab_seg"), outputs=tabs)
 
     return app
 
@@ -1284,6 +1216,8 @@ if __name__ == "__main__":
         share=False,
         show_error=True,
         ssr_mode=False,
-        css=APP_CSS,
+        css=APP_CSS + taxonomy_css(),
         theme=APP_THEME,
+        head=build_head(),
+        favicon_path="assets/favicon.svg",
     )
